@@ -114,6 +114,9 @@ data class SessionExerciseEntity(
     @ColumnInfo(name = "rest_seconds") val restSeconds: Int = 90,
     @ColumnInfo(name = "superset_group") val supersetGroup: String? = null,
     val strategy: String = SetStrategy.STANDARD.name,
+    @ColumnInfo(name = "planned_sets") val plannedSets: Int? = null,
+    @ColumnInfo(name = "target_weight_kg") val targetWeightKg: Double? = null,
+    @ColumnInfo(name = "target_reps") val targetReps: Int? = null,
 )
 
 @Entity(

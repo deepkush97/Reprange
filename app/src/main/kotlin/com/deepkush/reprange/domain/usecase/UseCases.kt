@@ -73,6 +73,9 @@ class StartWorkoutSessionUseCase @Inject constructor(
                         exerciseId = e.exerciseId,
                         restSeconds = e.restSeconds ?: 90,
                         supersetGroup = e.supersetGroup,
+                        plannedSets = e.setCount,
+                        targetWeightKg = e.targetWeightKg,
+                        targetReps = e.targetReps,
                     )
                 },
         )
@@ -80,7 +83,14 @@ class StartWorkoutSessionUseCase @Inject constructor(
 
     suspend fun blank(): Long = create(templateId = null, exercises = emptyList(), entries = emptyList())
 
-    data class StartEntry(val exerciseId: String, val restSeconds: Int, val supersetGroup: String?)
+    data class StartEntry(
+        val exerciseId: String,
+        val restSeconds: Int,
+        val supersetGroup: String?,
+        val plannedSets: Int? = null,
+        val targetWeightKg: Double? = null,
+        val targetReps: Int? = null,
+    )
 
     private suspend fun create(
         templateId: Long?,
@@ -101,6 +111,9 @@ class StartWorkoutSessionUseCase @Inject constructor(
                         orderIndex = i,
                         restSeconds = e.restSeconds,
                         supersetGroup = e.supersetGroup,
+                        plannedSets = e.plannedSets,
+                        targetWeightKg = e.targetWeightKg,
+                        targetReps = e.targetReps,
                     )
                 },
             )
