@@ -325,6 +325,7 @@ private fun AppNavHost(navController: NavHostController) {
                     navController.previousBackStackEntry?.savedStateHandle?.set("picked_exercise", exerciseId)
                     navController.popBackStack()
                 },
+                onBack = { navController.popBackStack() },
             )
         }
     }

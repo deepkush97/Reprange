@@ -67,11 +67,11 @@ fun ProgressScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
     ) {
-        Spacer(Modifier.height(52.dp))
+        Spacer(Modifier.windowInsetsPadding(LocalAppWindowInsets.current.only(WindowInsetsSides.Top)))
         Text(
             "Progress",
             style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.SemiBold),
-            modifier = Modifier.padding(start = 8.dp, bottom = 16.dp),
+            modifier = Modifier.padding(start = 8.dp, top = 24.dp, bottom = 16.dp),
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -192,32 +192,65 @@ private fun WeeklyVolumeChart(volumes: List<Double>, unit: WeightUnit) {
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val maxVolume = volumes.maxOrNull()?.takeIf { it > 0 } ?: 1.0
 
-    Box(Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                "last ${volumes.size} weeks",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "peak ${Formatters.volume(maxVolume, unit)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
         Canvas(
             Modifier
                 .fillMaxWidth()
                 .height(140.dp),
         ) {
             if (volumes.isEmpty()) return@Canvas
-            val gap = 8.dp.toPx()
+            val gap = 6.dp.toPx()
             val barWidth = (size.width - gap * (volumes.size - 1)) / volumes.size
             volumes.forEachIndexed { i, v ->
-                val h = (v / maxVolume * size.height * progress).toFloat().coerceAtLeast(if (v > 0) 4f else 2f)
+                val h = (v / maxVolume * size.height * progress).toFloat()
+                    .coerceAtLeast(if (v > 0) 4.dp.toPx() else 2.dp.toPx())
+                val r = minOf(barWidth, h) * 0.3f
                 drawRoundRect(
-                    color = if (v > 0) barColor else trackColor,
+                    color = if (v > 0) barColor else trackColor.copy(alpha = 0.6f),
                     topLeft = Offset(i * (barWidth + gap), size.height - h),
                     size = Size(barWidth, h),
-                    cornerRadius = CornerRadius(barWidth / 3f),
+                    cornerRadius = CornerRadius(r, r),
                 )
             }
+            drawLine(
+                color = trackColor,
+                start = Offset(0f, size.height - 1.dp.toPx()),
+                end = Offset(size.width, size.height - 1.dp.toPx()),
+                strokeWidth = 1.dp.toPx(),
+            )
         }
-        Text(
-            "last ${volumes.size} weeks · peak ${Formatters.volume(maxVolume, unit)}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outline,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 2.dp, end = 4.dp),
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                "${volumes.size - 1}w ago",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "now",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
     }
 }

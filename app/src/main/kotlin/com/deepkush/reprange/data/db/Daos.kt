@@ -68,7 +68,7 @@ interface ExerciseDao {
     @Query(
         """
         SELECT * FROM exercises
-        WHERE (:query IS NULL OR id IN (SELECT rowid FROM exercise_fts WHERE exercise_fts MATCH :fts))
+        WHERE (:query IS NULL OR rowid IN (SELECT rowid FROM exercise_fts WHERE exercise_fts MATCH :fts))
           AND (:category IS NULL OR category = :category)
           AND (:equipment IS NULL OR equipment = :equipment)
           AND (:difficulty IS NULL OR difficulty = :difficulty)
@@ -89,7 +89,7 @@ interface ExerciseDao {
     @Query(
         """
         SELECT COUNT(*) FROM exercises
-        WHERE (:query IS NULL OR id IN (SELECT rowid FROM exercise_fts WHERE exercise_fts MATCH :fts))
+        WHERE (:query IS NULL OR rowid IN (SELECT rowid FROM exercise_fts WHERE exercise_fts MATCH :fts))
           AND (:category IS NULL OR category = :category)
           AND (:equipment IS NULL OR equipment = :equipment)
           AND (:difficulty IS NULL OR difficulty = :difficulty)

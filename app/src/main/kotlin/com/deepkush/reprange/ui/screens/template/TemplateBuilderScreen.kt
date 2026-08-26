@@ -77,7 +77,7 @@ fun TemplateBuilderScreen(
             ),
     ) {
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(44.dp))
+            Spacer(Modifier.windowInsetsPadding(LocalAppWindowInsets.current.only(WindowInsetsSides.Top)))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(horizontal = 16.dp),

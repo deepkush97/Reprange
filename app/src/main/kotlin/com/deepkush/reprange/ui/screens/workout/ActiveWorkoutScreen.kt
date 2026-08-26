@@ -69,6 +69,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepkush.reprange.constants.PreferenceKeys
 import com.deepkush.reprange.utils.rememberPreference
 import com.deepkush.reprange.constants.WeightUnit
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.TrendingDown
 import com.deepkush.reprange.data.db.LoggedSetType
 import com.deepkush.reprange.data.db.SessionExerciseWithSets
 import com.deepkush.reprange.data.db.SetStrategy
@@ -78,6 +83,13 @@ import com.deepkush.reprange.utils.Formatters
 import com.deepkush.reprange.utils.listItemShape
 import com.deepkush.reprange.workout.ActiveSessionManager
 import com.deepkush.reprange.workout.ActiveSessionViewModel
+
+private fun LoggedSetType.icon(): androidx.compose.ui.graphics.vector.ImageVector = when (this) {
+    LoggedSetType.NORMAL -> Icons.Filled.FitnessCenter
+    LoggedSetType.WARMUP -> Icons.Filled.LocalFireDepartment
+    LoggedSetType.DROP_SET -> Icons.Filled.KeyboardDoubleArrowDown
+    LoggedSetType.FAILURE -> Icons.Filled.Bolt
+}
 
 @Composable
 fun ActiveWorkoutScreen(
@@ -115,7 +127,6 @@ fun ActiveWorkoutScreen(
 
     val active = session
     if (active == null) {
-        // Session finished/discarded elsewhere.
         LaunchedEffect(Unit) { onFinish() }
         return
     }
@@ -135,9 +146,7 @@ fun ActiveWorkoutScreen(
             ),
     ) {
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(44.dp))
-
-            // Top bar: exit, elapsed, rest timer chip.
+            Spacer(Modifier.windowInsetsPadding(LocalAppWindowInsets.current.only(WindowInsetsSides.Top)))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -197,7 +206,6 @@ fun ActiveWorkoutScreen(
             }
         }
 
-        // Bottom action bar: totals + finish.
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainer,
             shape = listItemShape(0, 1, radius = 24.dp),
@@ -304,36 +312,67 @@ private fun ExerciseEntryCard(
     val view = LocalView.current
     val entry = item.entry
     val sortedSets = item.sets.sortedBy { it.completedAt }
+    val strategy = runCatching { SetStrategy.valueOf(entry.strategy) }.getOrDefault(SetStrategy.STANDARD)
 
     var suggestion by remember(entry.id) { mutableStateOf<ActiveSessionManager.Suggestion?>(null) }
     LaunchedEffect(entry.id) {
         suggestion = viewModel.suggestionFor(entry.exerciseId)
     }
 
-    var weightText by remember(entry.id) {
-        mutableStateOf(suggestion?.let { Formatters.weightShort(it.weightKg, unit) } ?: "")
-    }
-    var repsText by remember(entry.id) { mutableStateOf(suggestion?.reps?.toString() ?: "") }
-    var selectedType by remember(entry.id) { mutableStateOf(LoggedSetType.NORMAL) }
+    var drafts by remember(entry.id) { mutableStateOf<List<DraftRow>>(emptyList()) }
+    var editTarget by remember(entry.id) { mutableStateOf<Pair<Int, Boolean>?>(null) }
     var showMenu by remember { mutableStateOf(false) }
 
-    val strategy = runCatching { SetStrategy.valueOf(entry.strategy) }.getOrDefault(SetStrategy.STANDARD)
+    LaunchedEffect(entry.id, suggestion) {
+        val planned = entry.plannedSets ?: 0
+        if (drafts.isEmpty() && planned == 0 && sortedSets.isEmpty()) {
+            val base = suggestion
+            drafts = listOf(
+                DraftRow(
+                    weightKg = base?.weightKg ?: 20.0,
+                    reps = base?.reps ?: 10,
+                    setType = LoggedSetType.NORMAL,
+                ),
+            )
+        }
+        if (drafts.isEmpty() && planned > 0) {
+            val base = entry.targetWeightKg?.let { ActiveSessionManager.Suggestion(it, entry.targetReps ?: 10) }
+                ?: suggestion
+            drafts = (0 until planned).map { i ->
+                val w = when {
+                    base == null -> 20.0
+                    strategy == SetStrategy.STEP_UP -> base.weightKg + 2.5 * i
+                    else -> base.weightKg
+                }
+                DraftRow(
+                    weightKg = w,
+                    reps = base?.reps ?: 10,
+                    setType = LoggedSetType.NORMAL,
+                )
+            }
+        }
+    }
 
-    // Prefill from previous performance once loaded; step-up escalates per completed set.
-    LaunchedEffect(sortedSets.size, strategy, suggestion) {
-        val base = suggestion ?: return@LaunchedEffect
-        val targetWeight = when {
-            strategy == SetStrategy.STEP_UP && sortedSets.isNotEmpty() ->
-                base.weightKg + 2.5 * sortedSets.size
+    fun addSet() {
+        val template = drafts.lastOrNull()
+            ?: sortedSets.lastOrNull()?.let {
+                DraftRow(it.weightKg, it.reps, runCatching { LoggedSetType.valueOf(it.setType) }.getOrDefault(LoggedSetType.NORMAL))
+            }
+            ?: suggestion?.let { DraftRow(it.weightKg, it.reps, LoggedSetType.NORMAL) }
+            ?: DraftRow(20.0, 10, LoggedSetType.NORMAL)
+        AppHaptics.tap(view)
+        drafts = drafts + template.copy(setType = LoggedSetType.NORMAL)
+    }
 
-            else -> base.weightKg
+    fun logRow(rowIdx: Int) {
+        val row = drafts.getOrNull(rowIdx) ?: return
+        if (row.weightKg <= 0.0 || row.reps <= 0) {
+            AppHaptics.reject(view)
+            return
         }
-        if (weightText.isBlank()) {
-            weightText = Formatters.weightShort(targetWeight, unit)
-        }
-        if (repsText.isBlank() && sortedSets.isEmpty()) {
-            repsText = base.reps.toString()
-        }
+        AppHaptics.primaryTap(view)
+        viewModel.logSet(entry, row.setType, row.weightKg, row.reps, entry.restSeconds, autoStartRest)
+        drafts = drafts.filterIndexed { i, _ -> i != rowIdx }
     }
 
     Card(
@@ -381,76 +420,63 @@ private fun ExerciseEntryCard(
                     "Last: ${Formatters.weight(it.weightKg, unit)} × ${it.reps}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 36.dp, top = 2.dp),
+                    modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 4.dp),
                 )
             }
 
             sortedSets.forEach { set ->
-                CompletedSetRow(set = set, unit = unit, onDelete = {
-                    AppHaptics.swipeCommit(view)
-                    viewModel.removeSet(set)
-                })
+                val type = runCatching { LoggedSetType.valueOf(set.setType) }.getOrDefault(LoggedSetType.NORMAL)
+                SetRow(
+                    setNumber = set.setNumber,
+                    weightKg = set.weightKg,
+                    reps = set.reps,
+                    setType = type,
+                    logged = true,
+                    unit = unit,
+                    onToggle = { },
+                    onCycleType = { },
+                    onEditWeight = { },
+                    onEditReps = { },
+                    onStepWeight = { },
+                    onStepReps = { },
+                    onDelete = {
+                        AppHaptics.swipeCommit(view)
+                        viewModel.removeSet(set)
+                    },
+                )
             }
 
-            // Logging row: weight / reps / type chips / commit.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 8.dp),
-            ) {
-                OutlinedTextField(
-                    value = weightText,
-                    onValueChange = { weightText = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text(unit.symbol) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
-                    modifier = Modifier.width(92.dp),
+            drafts.forEachIndexed { rowIdx, row ->
+                SetRow(
+                    setNumber = sortedSets.size + rowIdx + 1,
+                    weightKg = row.weightKg,
+                    reps = row.reps,
+                    setType = row.setType,
+                    logged = false,
+                    unit = unit,
+                    onToggle = { logRow(rowIdx) },
+                    onCycleType = {
+                        AppHaptics.segmentTick(view)
+                        val next = LoggedSetType.entries[(row.setType.ordinal + 1) % LoggedSetType.entries.size]
+                        drafts = drafts.update(rowIdx) { it.copy(setType = next) }
+                    },
+                    onEditWeight = { editTarget = rowIdx to true },
+                    onEditReps = { editTarget = rowIdx to false },
+                    onStepWeight = { delta ->
+                        val display = unit.fromKg(row.weightKg) + delta
+                        drafts = drafts.update(rowIdx) { it.copy(weightKg = unit.toKg(display).coerceAtLeast(0.0)) }
+                    },
+                    onStepReps = { delta ->
+                        drafts = drafts.update(rowIdx) { it.copy(reps = (it.reps + delta).coerceAtLeast(1)) }
+                    },
+                    onDelete = { },
                 )
-                OutlinedTextField(
-                    value = repsText,
-                    onValueChange = { repsText = it.filter { c -> c.isDigit() } },
-                    label = { Text("reps") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                    modifier = Modifier.width(78.dp),
-                )
+            }
 
-                LoggedSetType.entries.forEach { type ->
-                    FilterChip(
-                        selected = selectedType == type,
-                        onClick = {
-                            AppHaptics.segmentTick(view)
-                            selectedType = type
-                        },
-                        label = { Text(type.shortLabel) },
-                        modifier = Modifier.width(38.dp),
-                    )
-                }
-
-                val commit = {
-                    val w = unit.toKg(weightText.toDoubleOrNull() ?: 0.0)
-                    val r = repsText.toIntOrNull() ?: 0
-                    if (w > 0 && r > 0) {
-                        AppHaptics.primaryTap(view)
-                        viewModel.logSet(entry, selectedType, w, r, entry.restSeconds, autoStartRest)
-                        repsText = ""
-                        if (selectedType != LoggedSetType.NORMAL) selectedType = LoggedSetType.NORMAL
-                    } else {
-                        AppHaptics.reject(view)
-                    }
-                }
-
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clickable(onClick = commit),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Check, contentDescription = "Log set", tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                }
+            TextButton(onClick = ::addSet, modifier = Modifier.padding(top = 2.dp)) {
+                Icon(Icons.Filled.Add, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Add set")
             }
 
             if (showMenu) {
@@ -462,61 +488,237 @@ private fun ExerciseEntryCard(
             }
         }
     }
+
+    editTarget?.let { (rowIdx, isWeight) ->
+        val row = drafts.getOrNull(rowIdx) ?: run { editTarget = null; null }
+        if (row != null) {
+            com.deepkush.reprange.ui.component.TextFieldDialog(
+                title = if (isWeight) "Weight (${unit.symbol})" else "Reps",
+                fields = listOf(
+                    com.deepkush.reprange.ui.component.DialogFieldSpec(
+                        initial = if (isWeight) Formatters.weightShort(row.weightKg, unit)
+                        else row.reps.toString(),
+                        label = if (isWeight) unit.symbol else "reps",
+                        isValid = { v -> (v.toDoubleOrNull() ?: 0.0) > 0.0 },
+                    ),
+                ),
+                onConfirm = { vals ->
+                    val v = vals.first().toDoubleOrNull() ?: 0.0
+                    drafts = drafts.update(rowIdx) {
+                        if (isWeight) it.copy(weightKg = unit.toKg(v)) else it.copy(reps = v.toInt())
+                    }
+                    editTarget = null
+                },
+                onDismiss = { editTarget = null },
+            )
+        }
+    }
 }
 
-/** One-swipe left deletes a logged set (§ brief frictionless logging). */
-@Composable
-private fun CompletedSetRow(set: com.deepkush.reprange.data.db.CompletedSetEntity, unit: WeightUnit, onDelete: () -> Unit) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onDelete()
-                true
-            } else {
-                false
-            }
-        },
-    )
+private fun List<DraftRow>.update(index: Int, transform: (DraftRow) -> DraftRow): List<DraftRow> =
+    mapIndexed { i, row -> if (i == index) transform(row) else row }
 
-    SwipeToDismissBox(
-        state = dismissState,
-        backgroundContent = {
-            Box(
-                contentAlignment = Alignment.CenterEnd,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(end = 20.dp)
-                    .background(Color.Transparent),
-            ) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete set", tint = MaterialTheme.colorScheme.error)
+private data class DraftRow(
+    val weightKg: Double,
+    val reps: Int,
+    val setType: LoggedSetType,
+)
+
+@Composable
+private fun SetRow(
+    setNumber: Int,
+    weightKg: Double,
+    reps: Int,
+    setType: LoggedSetType,
+    logged: Boolean,
+    unit: WeightUnit,
+    onToggle: () -> Unit,
+    onCycleType: () -> Unit,
+    onEditWeight: () -> Unit,
+    onEditReps: () -> Unit,
+    onStepWeight: (Float) -> Unit,
+    onStepReps: (Int) -> Unit,
+    onDelete: () -> Unit,
+) {
+    val checkCircle: @Composable () -> Unit = {
+        Surface(
+            shape = CircleShape,
+            color = if (logged) MaterialTheme.colorScheme.primary else Color.Transparent,
+            border = if (logged) null else androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+            modifier = Modifier
+                .size(30.dp)
+                .clickable(onClick = onToggle, enabled = !logged),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Filled.Check,
+                    contentDescription = if (logged) "Logged" else "Complete set",
+                    tint = if (logged) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp),
+                )
             }
-        },
-        enableDismissFromStartToEnd = false,
-        modifier = Modifier.padding(top = 4.dp),
-    ) {
+        }
+    }
+
+    val content: @Composable () -> Unit = {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 3.dp),
+        ) {
+            checkCircle()
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "#$setNumber",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(26.dp),
+            )
+            StepperValue(
+                value = Formatters.weightShort(weightKg, unit),
+                label = unit.symbol,
+                onDecrement = { onStepWeight(-2.5f) },
+                onIncrement = { onStepWeight(2.5f) },
+                onTap = onEditWeight,
+                modifier = Modifier.weight(1f),
+                readOnly = logged,
+            )
+            Spacer(Modifier.width(6.dp))
+            StepperValue(
+                value = reps.toString(),
+                label = "reps",
+                onDecrement = { onStepReps(-1) },
+                onIncrement = { onStepReps(1) },
+                onTap = onEditReps,
+                modifier = Modifier.width(104.dp),
+                readOnly = logged,
+            )
+            Spacer(Modifier.width(4.dp))
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(30.dp)
+                    .clickable(onClick = onCycleType, enabled = !logged),
+            ) {
+                Icon(
+                    setType.icon(),
+                    contentDescription = if (logged) setType.label else "${setType.label} - tap to change",
+                    tint = if (setType == LoggedSetType.NORMAL) MaterialTheme.colorScheme.outline
+                    else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
+
+    if (logged) {
+        val dismissState = rememberSwipeToDismissBoxState(
+            confirmValueChange = { value ->
+                if (value == SwipeToDismissBoxValue.EndToStart) {
+                    onDelete()
+                    true
+                } else {
+                    false
+                }
+            },
+        )
+        SwipeToDismissBox(
+            state = dismissState,
+            backgroundContent = {
+                Box(
+                    contentAlignment = Alignment.CenterEnd,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(10.dp))
+                        .padding(end = 20.dp),
+                ) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete set", tint = MaterialTheme.colorScheme.onErrorContainer)
+                }
+            },
+            enableDismissFromStartToEnd = false,
+        ) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                content()
+            }
+        }
+    } else {
         Surface(
             shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.25f),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            content()
+        }
+    }
+}
+
+@Composable
+private fun StepperValue(
+    value: String,
+    label: String,
+    onDecrement: () -> Unit,
+    onIncrement: () -> Unit,
+    onTap: () -> Unit,
+    modifier: Modifier = Modifier,
+    readOnly: Boolean = false,
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
+        modifier = modifier,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 2.dp, vertical = 3.dp),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(30.dp)
+                    .clickable(enabled = !readOnly, onClick = onDecrement),
             ) {
-                val type = runCatching { LoggedSetType.valueOf(set.setType) }.getOrDefault(LoggedSetType.NORMAL)
+                if (!readOnly) {
+                    Text("−", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(enabled = !readOnly, onClick = onTap)
+                    .padding(horizontal = 2.dp, vertical = 3.dp),
+            ) {
                 Text(
-                    type.shortLabel,
+                    value,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                Text(
+                    label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (type == LoggedSetType.NORMAL) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.width(22.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
-                Text("#${set.setNumber}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(34.dp))
-                Text(
-                    "${Formatters.weightShort(set.weightKg, unit)} ${unit.symbol} × ${set.reps}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                Text("✓", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(30.dp)
+                    .clickable(enabled = !readOnly, onClick = onIncrement),
+            ) {
+                if (!readOnly) {
+                    Text("+", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                }
             }
         }
     }

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -71,6 +72,13 @@ fun LibraryScreen(
     val results by viewModel.results.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val seedState by viewModel.seedState.collectAsStateWithLifecycle()
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    androidx.compose.runtime.LaunchedEffect(
+        filters.query, filters.category, filters.difficulty, filters.equipment,
+    ) {
+        listState.scrollToItem(0)
+    }
 
     Column(
         Modifier
@@ -79,11 +87,11 @@ fun LibraryScreen(
                 LocalAppWindowInsets.current.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
             ),
     ) {
-        Spacer(Modifier.height(52.dp))
+        Spacer(Modifier.windowInsetsPadding(LocalAppWindowInsets.current.only(WindowInsetsSides.Top)))
         Text(
             "Library",
             style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.SemiBold),
-            modifier = Modifier.padding(start = 24.dp, bottom = 12.dp),
+            modifier = Modifier.padding(start = 24.dp, top = 24.dp, bottom = 12.dp),
         )
 
         OutlinedTextField(
@@ -144,7 +152,7 @@ fun LibraryScreen(
                 viewModel.retrySeed()
             }
 
-            else -> LazyColumn(Modifier.fillMaxSize()) {
+            else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 itemsIndexed(results, key = { _, e -> e.id }) { index, exercise ->
                     ExerciseRow(exercise) {
                         AppHaptics.contextClick(view)

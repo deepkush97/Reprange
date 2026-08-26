@@ -79,11 +79,11 @@ fun HomeScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
     ) {
-        Spacer(Modifier.padding(top = 56.dp))
+        Spacer(Modifier.windowInsetsPadding(LocalAppWindowInsets.current.only(WindowInsetsSides.Top)))
         Text(
             "Reprange",
             style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.SemiBold),
-            modifier = Modifier.padding(start = 8.dp),
+            modifier = Modifier.padding(start = 8.dp, top = 24.dp),
         )
         Text(
             "Log it. Beat it.",

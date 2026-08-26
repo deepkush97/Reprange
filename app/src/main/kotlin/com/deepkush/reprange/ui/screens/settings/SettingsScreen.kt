@@ -29,13 +29,11 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,7 +63,7 @@ import com.deepkush.reprange.utils.AppHaptics
 import com.deepkush.reprange.utils.rememberEnumPreference
 import com.deepkush.reprange.utils.rememberPreference
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen() {
     val view = LocalView.current
@@ -246,11 +244,6 @@ fun SettingsScreen() {
         }
         Spacer(Modifier.height(50.dp))
     }
-
-    TopAppBar(
-        title = { Text("Settings") },
-        navigationIcon = {},
-    )
 
     if (showDarkModeDialog) {
         EnumDialog(
