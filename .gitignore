@@ -1,0 +1,36 @@
+# Gradle
+.gradle/
+build/
+app/build/
+gradle/wrapper/gradle-wrapper.jar
+
+# Local config (contains SDK path / signing)
+local.properties
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+.navigation/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keystore
+*.jks
+*.keystore
+
+# Baseline profile
+app/src/main/baseline-prof.txt
+
+# APKs (keep source debuggables under version control only if you want — feel free to commit app-debug.apk)
+# *.apk  # uncomment to ignore all apks; currently kept ignored:
+*.apk
+!gradle/wrapper/gradle-wrapper.jar

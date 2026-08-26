@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Light base theme: the Compose layer paints the real scheme on top;
+         this only sets the window background so no dark flash/mismatch in light mode. -->
+    <style name="Theme.Reprange" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="o_mr1">shortEdges</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <style name="Theme.Reprange.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#F6F2EF</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Reprange</item>
+    </style>
+</resources>
