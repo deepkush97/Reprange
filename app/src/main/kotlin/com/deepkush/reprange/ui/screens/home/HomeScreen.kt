@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -309,39 +308,6 @@ fun HomeScreen(
         }
 
         Spacer(Modifier.height(120.dp))
-    }
-}
-
-@Composable
-fun HomeOnboardingCard(
-    onGetStarted: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        shape = listItemShape(0, 1, radius = 16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Personalize your routines?", style = MaterialTheme.typography.titleMedium)
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Get personalized workout routines based on your goals.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(12.dp))
-            Button(
-                onClick = onGetStarted,
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Text("Get started")
-            }
-        }
     }
 }
 

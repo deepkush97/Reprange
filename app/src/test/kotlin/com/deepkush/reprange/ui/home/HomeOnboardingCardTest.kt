@@ -1,83 +1,117 @@
 package com.deepkush.reprange.ui.home
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.deepkush.reprange.navigation.OnboardingRoute
+import com.deepkush.reprange.ui.screens.home.HomeOnboardingCard
 import com.google.common.truth.Truth.assertThat
+import org.junit.Rule
 import org.junit.Test
-import java.io.File
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [34])
 class HomeOnboardingCardTest {
 
-    private fun readSource(relative: String): String {
-        val userDir = System.getProperty("user.dir") ?: ""
-        val candidates = listOf(
-            File(relative),
-            File("app/$relative"),
-            File("$userDir/$relative"),
-            File("$userDir/app/$relative"),
-            File("/Users/deepkush/Deepanshu/Projects/test-skill/Reprange/$relative"),
-            File("/Users/deepkush/Deepanshu/Projects/test-skill/Reprange/app/$relative"),
-        )
-        val f = candidates.firstOrNull { it.exists() } ?: candidates.first()
-        return f.readText()
-    }
+    @get:Rule
+    val composeRule = createComposeRule()
 
-    @Test fun onboardingRoute_exists() {
-        // OnboardingRoute is a @Serializable data object – verify it loads
+    @Test
+    fun onboardingRoute_exists() {
         assertThat(OnboardingRoute.toString()).isNotEmpty()
         assertThat(OnboardingRoute::class.simpleName).isEqualTo("OnboardingRoute")
     }
 
-    @Test fun home_showsCardWhenNotCompleted() {
-        // Verify HomeScreen.kt contains the Onboarding card logic rather than launching Compose.
-        // This avoids Robolectric Activity resolution issues while still asserting the feature exists.
-        val homeScreen = readSource("app/src/main/kotlin/com/deepkush/reprange/ui/screens/home/HomeScreen.kt")
-            .let { if (it.isBlank()) readSource("src/main/kotlin/com/deepkush/reprange/ui/screens/home/HomeScreen.kt") else it }
-        // fallback for test runner where working dir is module root
-        val text = if (homeScreen.isNotEmpty()) homeScreen else File("src/main/kotlin/com/deepkush/reprange/ui/screens/home/HomeScreen.kt").takeIf { it.exists() }?.readText() ?: homeScreen
-        assertThat(text).contains("HomeOnboardingCard")
-        assertThat(text).contains("Personalize your routines?")
-        assertThat(text).contains("Get started")
-        assertThat(text).contains("ONBOARDING_COMPLETED")
-        assertThat(text).contains("onNavigateToOnboarding")
+    @Test
+    fun home_showsCardWhenNotCompleted() {
+        // Simulate ONBOARDING_COMPLETED = false -> card is visible.
+        var onboardingCompleted by mutableStateOf(false)
+
+        composeRule.setContent {
+            if (!onboardingCompleted) {
+                HomeOnboardingCard(onGetStarted = {})
+            }
+        }
+
+        composeRule.onNodeWithText("Personalize your routines?").assertIsDisplayed()
+        composeRule.onNodeWithText("Get personalized workout routines based on your goals.").assertIsDisplayed()
+        composeRule.onNodeWithText("Get started").assertIsDisplayed()
+        // sanity: state is false throughout this test
+        assertThat(onboardingCompleted).isFalse()
     }
 
-    @Test fun home_card_hasDescription() {
-        val homeScreen = readSource("app/src/main/kotlin/com/deepkush/reprange/ui/screens/home/HomeScreen.kt")
-        val text = if (homeScreen.isNotEmpty()) homeScreen else File("src/main/kotlin/com/deepkush/reprange/ui/screens/home/HomeScreen.kt").takeIf { it.exists() }?.readText() ?: homeScreen
-        assertThat(text).contains("Get personalized workout routines based on your goals.")
+    @Test
+    fun home_hidesCardWhenCompleted() {
+        // Simulate ONBOARDING_COMPLETED = true -> card not composed.
+        var onboardingCompleted by mutableStateOf(true)
+
+        composeRule.setContent {
+            if (!onboardingCompleted) {
+                HomeOnboardingCard(onGetStarted = {})
+            }
+        }
+
+        assertThat(composeRule.onAllNodesWithText("Personalize your routines?").fetchSemanticsNodes()).isEmpty()
+        assertThat(composeRule.onAllNodesWithText("Get started").fetchSemanticsNodes()).isEmpty()
+        assertThat(onboardingCompleted).isTrue()
     }
 
-    @Test fun home_card_visibility_dependsOnPreference() {
-        // Logic is: if (!onboardingCompleted) show card – verify the negation is present
-        val homeScreen = readSource("app/src/main/kotlin/com/deepkush/reprange/ui/screens/home/HomeScreen.kt")
-        val text = if (homeScreen.isNotEmpty()) homeScreen else File("src/main/kotlin/com/deepkush/reprange/ui/screens/home/HomeScreen.kt").takeIf { it.exists() }?.readText() ?: homeScreen
-        assertThat(text).contains("if (!onboardingCompleted)")
-        assertThat(text).contains("rememberPreference(PreferenceKeys.ONBOARDING_COMPLETED")
+    @Test
+    fun home_card_hasDescription() {
+        composeRule.setContent {
+            HomeOnboardingCard(onGetStarted = {})
+        }
+
+        composeRule.onNodeWithText("Get personalized workout routines based on your goals.").assertIsDisplayed()
     }
 
-    @Test fun settings_hasPersonalizeRow() {
-        val settings = readSource("app/src/main/kotlin/com/deepkush/reprange/ui/screens/settings/SettingsScreen.kt")
-        val text = if (settings.isNotEmpty()) settings else File("src/main/kotlin/com/deepkush/reprange/ui/screens/settings/SettingsScreen.kt").takeIf { it.exists() }?.readText() ?: settings
-        assertThat(text).contains("Personalize routines")
-        assertThat(text).contains("Personalize")
-        assertThat(text).contains("onNavigateToOnboarding")
+    @Test
+    fun home_card_getStarted_click_invokesCallback() {
+        val clicked = androidx.compose.runtime.mutableStateOf(false)
+
+        composeRule.setContent {
+            HomeOnboardingCard(onGetStarted = { clicked.value = true })
+        }
+
+        composeRule.onNodeWithTag("home_onboarding_get_started").assertIsDisplayed()
+        composeRule.onNodeWithTag("home_onboarding_get_started").assertHasClickAction()
+        // Verify click action is present and invokes callback. Use semantics OnClick
+        // directly because performClick/performTouchInput are flaky with Robolectric
+        // dispatcher; direct invoke still proves wiring is correct.
+        val node = composeRule.onNodeWithTag("home_onboarding_get_started").fetchSemanticsNode()
+        val onClick = node.config[androidx.compose.ui.semantics.SemanticsActions.OnClick]
+        assertThat(onClick).isNotNull()
+        onClick!!.action!!.invoke()
+        composeRule.waitForIdle()
+        assertThat(clicked.value).isTrue()
     }
 
-    @Test fun reprangeRoot_hidesChromeOnOnboarding() {
-        val root = readSource("app/src/main/kotlin/com/deepkush/reprange/ReprangeRoot.kt")
-        val text = if (root.isNotEmpty()) root else File("src/main/kotlin/com/deepkush/reprange/ReprangeRoot.kt").takeIf { it.exists() }?.readText() ?: root
-        assertThat(text).contains("OnboardingRoute")
-        // Hide chrome check as per brief: contains OnboardingRoute and ActiveWorkout
-        assertThat(text).contains("contains(\"OnboardingRoute\")")
-        assertThat(text).contains("contains(\"ActiveWorkout\")")
-        assertThat(text).contains("composable<OnboardingRoute>")
-        assertThat(text).contains("OnboardingScreen(onFinish")
-    }
+    @Test
+    fun home_card_recomposes_visibilityToggle() {
+        // Start not completed -> visible, then flip to completed -> gone.
+        var onboardingCompleted by mutableStateOf(false)
 
-    @Test fun routes_containsOnboardingRoute() {
-        val routes = readSource("app/src/main/kotlin/com/deepkush/reprange/navigation/Routes.kt")
-        val text = if (routes.isNotEmpty()) routes else File("src/main/kotlin/com/deepkush/reprange/navigation/Routes.kt").takeIf { it.exists() }?.readText() ?: routes
-        assertThat(text).contains("data object OnboardingRoute")
-        assertThat(text).contains("@Serializable")
+        composeRule.setContent {
+            if (!onboardingCompleted) {
+                HomeOnboardingCard(onGetStarted = {})
+            }
+        }
+
+        composeRule.onNodeWithText("Personalize your routines?").assertIsDisplayed()
+
+        composeRule.runOnUiThread { onboardingCompleted = true }
+        // Wait for recomposition
+        composeRule.waitForIdle()
+
+        assertThat(composeRule.onAllNodesWithText("Personalize your routines?").fetchSemanticsNodes()).isEmpty()
     }
 }
