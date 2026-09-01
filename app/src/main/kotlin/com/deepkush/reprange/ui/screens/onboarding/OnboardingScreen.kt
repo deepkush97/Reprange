@@ -39,10 +39,12 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -68,6 +70,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepkush.reprange.constants.PreferenceKeys
+import com.deepkush.reprange.data.repo.DatasetSeeder
 import com.deepkush.reprange.domain.onboarding.EquipmentProfile
 import com.deepkush.reprange.domain.onboarding.Experience
 import com.deepkush.reprange.domain.onboarding.Goal
@@ -98,6 +101,7 @@ fun OnboardingScreen(
     val profile by viewModel.profile.collectAsStateWithLifecycle()
     val currentStep by viewModel.currentStep.collectAsStateWithLifecycle()
     val preview by viewModel.preview.collectAsStateWithLifecycle()
+    val seedState by viewModel.seedState.collectAsStateWithLifecycle()
     val view = LocalView.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -199,8 +203,37 @@ fun OnboardingScreen(
                     )
                 }
 
-                Box(Modifier.weight(1f)) {
-                    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                when (seedState) {
+                    is DatasetSeeder.SeedState.Loading -> {
+                        Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(Modifier.height(12.dp))
+                                Text("Fetching the exercise dataset…", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                    is DatasetSeeder.SeedState.Error -> {
+                        Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(32.dp),
+                            ) {
+                                Text("Failed to load dataset", style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    (seedState as DatasetSeeder.SeedState.Error).message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                TextButton(onClick = { viewModel.retrySeed() }) { Text("Retry") }
+                            }
+                        }
+                    }
+                    else -> {
+                        Box(Modifier.weight(1f)) {
+                            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                         val template = templates[page]
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -229,7 +262,23 @@ fun OnboardingScreen(
                                     },
                                 )
                             }
+                            // Short-list placeholder: if bucket was empty (even after fallback), show "+ Add exercise"
+                            item {
+                                val expected = expectedCountForTemplate(profile.split, template.title)
+                                if (template.items.size < expected) {
+                                    val missing = expected - template.items.size
+                                    AddExercisePlaceholder(
+                                        missing = missing,
+                                        onAdd = {
+                                            AppHaptics.tap(view)
+                                            onPickExercise(page, template.items.size)
+                                        },
+                                    )
+                                }
+                            }
                             item { Spacer(Modifier.height(120.dp)) }
+                        }
+                    }
                         }
                     }
                 }
@@ -334,6 +383,55 @@ fun OnboardingScreen(
                 }
                 Spacer(Modifier.height(20.dp))
 
+                when (seedState) {
+                    is DatasetSeeder.SeedState.Loading -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(bottom = 12.dp),
+                        ) {
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                "Loading exercise database…",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    is DatasetSeeder.SeedState.Error -> {
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                            onClick = { viewModel.retrySeed() },
+                            modifier = Modifier.padding(bottom = 12.dp),
+                        ) {
+                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.SwapHoriz,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        "Couldn't load exercises",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                    )
+                                    Text(
+                                        (seedState as DatasetSeeder.SeedState.Error).message,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                                        maxLines = 2,
+                                    )
+                                }
+                                TextButton(onClick = { viewModel.retrySeed() }) { Text("Retry") }
+                            }
+                        }
+                    }
+                    else -> {}
+                }
+
                 Box(Modifier.weight(1f)) {
                     AnimatedContent(
                         targetState = currentStep,
@@ -423,8 +521,12 @@ fun OnboardingScreen(
                                     }
                                 }
                             },
-                            enabled = !isGeneratingPreview && !isSaving,
+                            enabled = !isGeneratingPreview && !isSaving && seedState !is DatasetSeeder.SeedState.Loading,
                         ) {
+                            if (isGeneratingPreview) {
+                                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                            }
                             Text(if (currentStep < 4) "Continue" else "Preview")
                         }
                     }
@@ -632,6 +734,48 @@ private fun SplitStep(selected: Split, days: Int, onSelect: (Split) -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+        }
+    }
+}
+
+private fun expectedCountForTemplate(split: Split, title: String): Int = when (split) {
+    Split.FULL_BODY -> 6
+    Split.UPPER_LOWER -> 5
+    Split.PPL -> 5
+}
+
+@Composable
+private fun AddExercisePlaceholder(missing: Int, onAdd: () -> Unit) {
+    OutlinedCard(
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).clickable(onClick = onAdd),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(14.dp),
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "+ Add exercise",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                if (missing > 1) {
+                    Text(
+                        "$missing exercises missing — tap to add",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        "No exercise found for this bucket — tap to add",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

@@ -112,7 +112,8 @@ interface ExerciseDao {
     @Query(
         """
         SELECT * FROM exercises
-        WHERE (target IN (:targets) OR category IN (:targets) OR muscle_group IN (:targets))
+        WHERE (target IN (:targets) OR category IN (:targets) OR muscle_group IN (:targets)
+               OR EXISTS (SELECT 1 FROM json_each(secondary_muscles) WHERE value IN (:targets)))
           AND difficulty IN (:difficulties)
         ORDER BY name
         LIMIT :limit
@@ -127,7 +128,8 @@ interface ExerciseDao {
     @Query(
         """
         SELECT * FROM exercises
-        WHERE (target IN (:targets) OR category IN (:targets) OR muscle_group IN (:targets))
+        WHERE (target IN (:targets) OR category IN (:targets) OR muscle_group IN (:targets)
+               OR EXISTS (SELECT 1 FROM json_each(secondary_muscles) WHERE value IN (:targets)))
           AND equipment IN (:equipment)
           AND difficulty IN (:difficulties)
         ORDER BY name

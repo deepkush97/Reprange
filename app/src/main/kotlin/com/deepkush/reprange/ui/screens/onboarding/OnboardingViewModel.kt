@@ -2,6 +2,8 @@ package com.deepkush.reprange.ui.screens.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.deepkush.reprange.data.repo.DatasetSeeder
+import com.deepkush.reprange.data.repo.ExerciseRepository
 import com.deepkush.reprange.domain.onboarding.EquipmentProfile
 import com.deepkush.reprange.domain.onboarding.Experience
 import com.deepkush.reprange.domain.onboarding.Goal
@@ -9,17 +11,21 @@ import com.deepkush.reprange.domain.onboarding.OnboardingProfile
 import com.deepkush.reprange.domain.onboarding.OnboardingRecommender
 import com.deepkush.reprange.domain.onboarding.PreviewTemplate
 import com.deepkush.reprange.domain.onboarding.Split
+import com.deepkush.reprange.domain.onboarding.config
 import com.deepkush.reprange.domain.onboarding.validForDays
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     private val recommender: OnboardingRecommender,
+    private val exerciseRepository: ExerciseRepository? = null,
 ) : ViewModel() {
 
     private val _profile = MutableStateFlow(
@@ -88,13 +94,48 @@ class OnboardingViewModel @Inject constructor(
         }
     }
 
+    val seedState: StateFlow<DatasetSeeder.SeedState> =
+        exerciseRepository?.seedState
+            ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DatasetSeeder.SeedState.Done)
+            ?: MutableStateFlow(DatasetSeeder.SeedState.Done)
+
+    fun retrySeed() {
+        viewModelScope.launch { exerciseRepository?.seedIfNeeded() }
+    }
+
     fun swapExercise(templateIndex: Int, itemIndex: Int, newExerciseId: String) {
         val current = _preview.value ?: return
         if (templateIndex !in current.indices) return
         val template = current[templateIndex]
+        if (itemIndex == template.items.size) {
+            // Placeholder add case: append new exercise
+            addExercise(templateIndex, newExerciseId)
+            return
+        }
         if (itemIndex !in template.items.indices) return
         val updatedItems = template.items.toMutableList()
         updatedItems[itemIndex] = updatedItems[itemIndex].copy(exerciseId = newExerciseId)
+        val updatedTemplate = template.copy(items = updatedItems)
+        val updated = current.toMutableList()
+        updated[templateIndex] = updatedTemplate
+        _preview.value = updated
+    }
+
+    fun addExercise(templateIndex: Int, newExerciseId: String) {
+        val current = _preview.value ?: return
+        if (templateIndex !in current.indices) return
+        val template = current[templateIndex]
+        val config = _profile.value.goal.config()
+        // Use profile's goal config for added item; strategy similar to recommender
+        val strategy = com.deepkush.reprange.data.db.SetStrategy.STANDARD
+        val newItem = com.deepkush.reprange.domain.usecase.PlanItem(
+            exerciseId = newExerciseId,
+            setCount = config.sets,
+            strategy = strategy,
+            targetReps = config.repLow,
+            restSeconds = config.restSeconds,
+        )
+        val updatedItems = template.items + newItem
         val updatedTemplate = template.copy(items = updatedItems)
         val updated = current.toMutableList()
         updated[templateIndex] = updatedTemplate

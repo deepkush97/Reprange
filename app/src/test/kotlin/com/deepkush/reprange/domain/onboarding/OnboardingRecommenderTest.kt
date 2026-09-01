@@ -16,7 +16,8 @@ private class FakeExerciseDao(
 
     private fun matchesTargets(e: ExerciseEntity, targets: List<String>): Boolean {
         val t = targets.map { it.lowercase() }.toSet()
-        return e.target.lowercase() in t || e.category.lowercase() in t || e.muscleGroup.lowercase() in t
+        return e.target.lowercase() in t || e.category.lowercase() in t || e.muscleGroup.lowercase() in t ||
+            e.secondaryMuscles.any { it.lowercase() in t }
     }
 
     override suspend fun count(): Int = exercises.size
@@ -235,5 +236,90 @@ class OnboardingRecommenderTest {
         val result = engine.recommend(profile)
         // With fallback, should still return 6 items despite no BEGINNER items
         assertThat(result[0].items).hasSize(6)
+    }
+
+    @Test
+    fun recommend_emptyBucket_fallsBackOneTier() = runTest {
+        // BEGINNER bodyweight profile: waist bucket empty for BEGINNER, only INTERMEDIATE exists
+        // Engine should relax one tier and return waist item via fallback
+        val ex = mutableListOf<ExerciseEntity>()
+        ex += exercise("c1", category = "chest", equipment = "body weight", difficulty = "BEGINNER")
+        ex += exercise("b1", category = "back", equipment = "body weight", difficulty = "BEGINNER")
+        ex += exercise("s1", category = "shoulders", equipment = "body weight", difficulty = "BEGINNER")
+        ex += exercise("ul1", category = "upper legs", equipment = "body weight", difficulty = "BEGINNER")
+        // waist only INTERMEDIATE — BEGINNER query returns empty, fallback should find it
+        ex += exercise("w1", category = "waist", equipment = "body weight", difficulty = "INTERMEDIATE")
+        ex += exercise("a1", category = "upper arms", equipment = "body weight", difficulty = "BEGINNER")
+        val fakeDao = FakeExerciseDao(ex)
+        val engine = OnboardingRecommender(fakeDao)
+        val profile = OnboardingProfile(Goal.GENERAL_FITNESS, Experience.BEGINNER, EquipmentProfile.BODYWEIGHT, 3, Split.FULL_BODY)
+        val result = engine.recommend(profile)
+        assertThat(result).hasSize(1)
+        assertThat(result[0].items).hasSize(6)
+        assertThat(result[0].items.map { it.exerciseId }).contains("w1")
+    }
+
+    @Test
+    fun recommend_emptyBucket_stillEmpty_showsShortList() = runTest {
+        // No waist exercise at all even after fallback → short list (5 instead of 6)
+        val ex = mutableListOf<ExerciseEntity>()
+        ex += exercise("c1", category = "chest", equipment = "body weight", difficulty = "BEGINNER")
+        ex += exercise("b1", category = "back", equipment = "body weight", difficulty = "BEGINNER")
+        ex += exercise("s1", category = "shoulders", equipment = "body weight", difficulty = "BEGINNER")
+        ex += exercise("ul1", category = "upper legs", equipment = "body weight", difficulty = "BEGINNER")
+        // waist missing entirely
+        ex += exercise("a1", category = "upper arms", equipment = "body weight", difficulty = "BEGINNER")
+        val fakeDao = FakeExerciseDao(ex)
+        val engine = OnboardingRecommender(fakeDao)
+        val profile = OnboardingProfile(Goal.GENERAL_FITNESS, Experience.BEGINNER, EquipmentProfile.BODYWEIGHT, 3, Split.FULL_BODY)
+        val result = engine.recommend(profile)
+        assertThat(result).hasSize(1)
+        // Should be 5, not 6, and no crash — UI will show placeholder for missing bucket
+        assertThat(result[0].items).hasSize(5)
+    }
+
+    @Test
+    fun recommend_matchesSecondaryMuscles() = runTest {
+        // Exercise that only matches via secondaryMuscles (e.g., triceps via secondary)
+        // Bucket for triceps (PPL Push triceps) should find it even if target/category are different
+        val ex = mutableListOf<ExerciseEntity>()
+        ex += exercise("ch1", category = "chest", difficulty = "BEGINNER")
+        ex += exercise("ch2", category = "chest", difficulty = "BEGINNER")
+        ex += exercise("sh1", category = "shoulders", difficulty = "BEGINNER")
+        ex += exercise("sh2", category = "shoulders", difficulty = "BEGINNER")
+        // triceps only via secondaryMuscles, not primary target
+        ex += ExerciseEntity(
+            id = "tri_sec",
+            name = "ex tri_sec",
+            category = "upper arms",
+            target = "upper arms",
+            muscleGroup = "upper arms",
+            secondaryMuscles = listOf("triceps"),
+            equipment = "body weight",
+            difficulty = "BEGINNER",
+            instructionsEn = emptyList(),
+            imageUrl = "",
+            gifUrl = "",
+            mediaId = "",
+            attribution = "",
+        )
+        // Fill remaining for Pull/Legs to make DAO not empty
+        ex += exercise("bk1", category = "back", difficulty = "BEGINNER")
+        ex += exercise("bk2", category = "back", difficulty = "BEGINNER")
+        ex += exercise("bi1", category = "upper arms", target = "biceps", muscleGroup = "biceps", difficulty = "BEGINNER")
+        ex += exercise("bi2", category = "upper arms", target = "biceps", muscleGroup = "biceps", difficulty = "BEGINNER")
+        ex += exercise("ul1", category = "upper legs", difficulty = "BEGINNER")
+        ex += exercise("ul2", category = "upper legs", difficulty = "BEGINNER")
+        ex += exercise("ll1", category = "lower legs", difficulty = "BEGINNER")
+        ex += exercise("wa1", category = "waist", difficulty = "BEGINNER")
+        ex += exercise("wa2", category = "waist", difficulty = "BEGINNER")
+        val fakeDao = FakeExerciseDao(ex)
+        val engine = OnboardingRecommender(fakeDao)
+        val profile = OnboardingProfile(Goal.STRENGTH, Experience.BEGINNER, EquipmentProfile.FULL_GYM, 6, Split.PPL)
+        val result = engine.recommend(profile)
+        assertThat(result).hasSize(3)
+        // Push should have 5 items, including tri_sec via secondaryMuscles fallback
+        val pushIds = result[0].items.map { it.exerciseId }
+        assertThat(pushIds).contains("tri_sec")
     }
 }
