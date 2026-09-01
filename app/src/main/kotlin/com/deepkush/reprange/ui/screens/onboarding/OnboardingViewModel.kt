@@ -2,7 +2,6 @@ package com.deepkush.reprange.ui.screens.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.deepkush.reprange.data.db.ExerciseDao
 import com.deepkush.reprange.domain.onboarding.EquipmentProfile
 import com.deepkush.reprange.domain.onboarding.Experience
 import com.deepkush.reprange.domain.onboarding.Goal
@@ -22,9 +21,6 @@ import kotlinx.coroutines.launch
 class OnboardingViewModel @Inject constructor(
     private val recommender: OnboardingRecommender,
 ) : ViewModel() {
-
-    // Secondary constructor for unit tests that supply a fake ExerciseDao directly.
-    constructor(dao: ExerciseDao) : this(OnboardingRecommender(dao))
 
     private val _profile = MutableStateFlow(
         OnboardingProfile(

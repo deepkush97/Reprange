@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -36,11 +35,16 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,8 +63,6 @@ import com.deepkush.reprange.domain.onboarding.validForDays
 import com.deepkush.reprange.ui.component.LocalAppWindowInsets
 import com.deepkush.reprange.utils.AppHaptics
 import com.deepkush.reprange.utils.dataStore
-import com.deepkush.reprange.utils.rememberEnumPreference
-import com.deepkush.reprange.utils.rememberPreference
 import kotlinx.coroutines.launch
 
 @Composable
@@ -73,17 +75,9 @@ fun OnboardingScreen(
     val view = LocalView.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // Keep in-memory in ViewModel until Finish; persistence mirrors rememberEnumPreference pattern.
-    @Suppress("UNUSED_VARIABLE")
-    val _persistGoal = rememberEnumPreference(PreferenceKeys.ONBOARDING_GOAL, Goal.GENERAL_FITNESS)
-    @Suppress("UNUSED_VARIABLE")
-    val _persistExp = rememberEnumPreference(PreferenceKeys.ONBOARDING_EXPERIENCE, Experience.BEGINNER)
-    @Suppress("UNUSED_VARIABLE")
-    val _persistEquipment = rememberEnumPreference(PreferenceKeys.ONBOARDING_EQUIPMENT, EquipmentProfile.FULL_GYM)
-    @Suppress("UNUSED_VARIABLE")
-    val _persistDays = rememberPreference(PreferenceKeys.ONBOARDING_DAYS, 3)
-    @Suppress("UNUSED_VARIABLE")
-    val _persistSplit = rememberEnumPreference(PreferenceKeys.ONBOARDING_SPLIT, Split.FULL_BODY)
+    val snackbarHostState = remember { SnackbarHostState() }
+    var previewError by remember { mutableStateOf<String?>(null) }
+    var isGeneratingPreview by remember { mutableStateOf(false) }
 
     fun persistAndFinish() {
         scope.launch {
@@ -109,117 +103,150 @@ fun OnboardingScreen(
         }
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(LocalAppWindowInsets.current.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
-            .padding(horizontal = 16.dp),
-    ) {
-        Spacer(Modifier.windowInsetsPadding(LocalAppWindowInsets.current.only(WindowInsetsSides.Top)))
-        Spacer(Modifier.height(16.dp))
-        // Progress dots
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(LocalAppWindowInsets.current.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+                .padding(horizontal = 16.dp),
         ) {
-            repeat(5) { index ->
-                val isActive = index == currentStep
-                val isCompleted = index < currentStep
-                Box(
-                    modifier = Modifier
-                        .height(8.dp)
-                        .width(if (isActive) 28.dp else 8.dp)
-                        .clip(CircleShape)
-                        .background(
-                            when {
-                                isActive -> MaterialTheme.colorScheme.primary
-                                isCompleted -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                                else -> MaterialTheme.colorScheme.surfaceVariant
-                            },
-                        ),
+            Spacer(Modifier.windowInsetsPadding(LocalAppWindowInsets.current.only(WindowInsetsSides.Top)))
+            Spacer(Modifier.height(16.dp))
+            // Progress dots
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                repeat(5) { index ->
+                    val isActive = index == currentStep
+                    val isCompleted = index < currentStep
+                    Box(
+                        modifier = Modifier
+                            .height(8.dp)
+                            .width(if (isActive) 28.dp else 8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    isActive -> MaterialTheme.colorScheme.primary
+                                    isCompleted -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                },
+                            ),
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "${currentStep + 1} / 5",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = "${currentStep + 1} / 5",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(20.dp))
 
-        Box(Modifier.weight(1f)) {
-            AnimatedContent(
-                targetState = currentStep,
-                transitionSpec = {
-                    if (targetState > initialState) {
-                        slideInHorizontally { it / 3 } + fadeIn(tween(220)) togetherWith
-                            slideOutHorizontally { -it / 3 } + fadeOut(tween(220))
-                    } else {
-                        slideInHorizontally { -it / 3 } + fadeIn(tween(220)) togetherWith
-                            slideOutHorizontally { it / 3 } + fadeOut(tween(220))
-                    }
-                },
-                label = "onboarding_step",
-            ) { step ->
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    when (step) {
-                        0 -> GoalStep(selected = profile.goal, onSelect = { AppHaptics.segmentTick(view); viewModel.setGoal(it) })
-                        1 -> ExperienceStep(selected = profile.experience, onSelect = { AppHaptics.segmentTick(view); viewModel.setExperience(it) })
-                        2 -> EquipmentStep(selected = profile.equipment, onSelect = { AppHaptics.segmentTick(view); viewModel.setEquipment(it) })
-                        3 -> DaysStep(days = profile.days, onDaysChange = { newDays -> AppHaptics.scrubTick(view); viewModel.setDays(newDays) })
-                        4 -> SplitStep(selected = profile.split, days = profile.days, onSelect = { AppHaptics.segmentTick(view); viewModel.setSplit(it) })
-                    }
-                    Spacer(Modifier.height(24.dp))
-                }
-            }
-        }
-
-        // Footer
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = ::onSkip) {
-                Text("Skip")
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (currentStep > 0) {
-                    TextButton(onClick = { AppHaptics.tap(view); viewModel.prevStep() }) {
-                        Text("Back")
-                    }
-                }
-                Button(
-                    onClick = {
-                        AppHaptics.primaryTap(view)
-                        if (currentStep < 4) {
-                            viewModel.nextStep()
+            Box(Modifier.weight(1f)) {
+                AnimatedContent(
+                    targetState = currentStep,
+                    transitionSpec = {
+                        if (targetState > initialState) {
+                            slideInHorizontally { it / 3 } + fadeIn(tween(220)) togetherWith
+                                slideOutHorizontally { -it / 3 } + fadeOut(tween(220))
                         } else {
-                            // Last step: generate preview then persist and finish
-                            scope.launch {
-                                try {
-                                    viewModel.generatePreview()
-                                } catch (_: Exception) {
-                                    // ignore preview failure; still persist
-                                }
-                                persistAndFinish()
-                            }
+                            slideInHorizontally { -it / 3 } + fadeIn(tween(220)) togetherWith
+                                slideOutHorizontally { it / 3 } + fadeOut(tween(220))
                         }
                     },
-                ) {
-                    Text(if (currentStep < 4) "Continue" else "Finish")
+                    label = "onboarding_step",
+                ) { step ->
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        when (step) {
+                            0 -> GoalStep(selected = profile.goal, onSelect = { AppHaptics.segmentTick(view); viewModel.setGoal(it) })
+                            1 -> ExperienceStep(selected = profile.experience, onSelect = { AppHaptics.segmentTick(view); viewModel.setExperience(it) })
+                            2 -> EquipmentStep(selected = profile.equipment, onSelect = { AppHaptics.segmentTick(view); viewModel.setEquipment(it) })
+                            3 -> DaysStep(days = profile.days, onDaysChange = { newDays -> AppHaptics.scrubTick(view); viewModel.setDays(newDays) })
+                            4 -> SplitStep(selected = profile.split, days = profile.days, onSelect = { AppHaptics.segmentTick(view); viewModel.setSplit(it) })
+                        }
+                        Spacer(Modifier.height(24.dp))
+                    }
                 }
             }
+
+            if (previewError != null) {
+                Text(
+                    text = previewError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                )
+            }
+
+            // Footer
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = ::onSkip) {
+                    Text("Skip")
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (currentStep > 0) {
+                        TextButton(onClick = { AppHaptics.tap(view); viewModel.prevStep() }) {
+                            Text("Back")
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            AppHaptics.primaryTap(view)
+                            if (currentStep < 4) {
+                                previewError = null
+                                viewModel.nextStep()
+                            } else {
+                                scope.launch {
+                                    isGeneratingPreview = true
+                                    previewError = null
+                                    try {
+                                        viewModel.generatePreview()
+                                        val result = viewModel.preview.value
+                                        if (result == null) {
+                                            val msg = "Failed to generate preview. Please try again."
+                                            previewError = msg
+                                            snackbarHostState.showSnackbar(msg)
+                                        } else {
+                                            persistAndFinish()
+                                        }
+                                    } catch (e: Exception) {
+                                        val msg = e.message ?: "Failed to generate preview. Please try again."
+                                        previewError = msg
+                                        snackbarHostState.showSnackbar(msg)
+                                    } finally {
+                                        isGeneratingPreview = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isGeneratingPreview,
+                    ) {
+                        Text(if (currentStep < 4) "Continue" else "Finish")
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
         }
-        Spacer(Modifier.height(8.dp))
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp),
+        )
     }
 }
 

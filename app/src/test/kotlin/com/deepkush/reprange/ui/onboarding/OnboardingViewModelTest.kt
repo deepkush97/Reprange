@@ -33,7 +33,7 @@ class OnboardingViewModelTest {
 
     private fun createVm(): OnboardingViewModel {
         val dao = FakeExerciseDao()
-        return OnboardingViewModel(dao)
+        return OnboardingViewModel(OnboardingRecommender(dao))
     }
 
     @Test
@@ -141,7 +141,7 @@ class OnboardingViewModelTest {
             }
         }
         // For FULL_GYM profile, recommender will query getByTargets
-        val vm = OnboardingViewModel(dao)
+        val vm = OnboardingViewModel(OnboardingRecommender(dao))
         vm.setDays(3)
         // ensure split is FULL_BODY
         vm.setSplit(Split.FULL_BODY)
@@ -168,7 +168,7 @@ class OnboardingViewModelTest {
                 return getByTargets(targets, difficulties, limit)
             }
         }
-        val vm = OnboardingViewModel(dao)
+        val vm = OnboardingViewModel(OnboardingRecommender(dao))
         vm.generatePreview()
         val before = vm.preview.value?.firstOrNull()?.items?.firstOrNull()?.exerciseId
         assertThat(before).isNotNull()
