@@ -65,7 +65,9 @@ import com.deepkush.reprange.utils.rememberPreference
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(
+    onNavigateToOnboarding: () -> Unit = {},
+) {
     val view = LocalView.current
     val context = LocalContext.current
 
@@ -192,6 +194,20 @@ fun SettingsScreen() {
                         onClick = {
                             if (!showGifs) AppHaptics.toggleOn(view) else AppHaptics.toggleOff(view)
                             onShowGifs(!showGifs)
+                        },
+                    ),
+                ),
+            ),
+            SettingsGroupSpec(
+                title = "Personalize",
+                items = listOf(
+                    SettingsItemSpec(
+                        title = "Personalize routines",
+                        description = "Goals, experience, equipment",
+                        icon = Icons.Filled.FitnessCenter,
+                        onClick = {
+                            AppHaptics.tap(view)
+                            onNavigateToOnboarding()
                         },
                     ),
                 ),

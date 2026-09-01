@@ -104,4 +104,9 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.google.truth:truth:1.4.4")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation("androidx.compose.ui:ui-test-junit4:1.11.4")
+    testImplementation("androidx.compose.ui:ui-test-manifest:1.11.4")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("org.robolectric:robolectric:4.12")
+    testImplementation("androidx.test.ext:junit:1.2.1")
 }

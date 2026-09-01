@@ -50,9 +50,11 @@ import com.deepkush.reprange.ui.component.LocalAppWindowInsets
 import com.deepkush.reprange.ui.component.SettingsGroup
 import com.deepkush.reprange.ui.component.SettingsGroupSpec
 import com.deepkush.reprange.ui.component.SettingsItemSpec
+import com.deepkush.reprange.constants.PreferenceKeys
 import com.deepkush.reprange.utils.AppHaptics
 import com.deepkush.reprange.utils.Formatters
 import com.deepkush.reprange.utils.listItemShape
+import com.deepkush.reprange.utils.rememberPreference
 import com.deepkush.reprange.viewmodels.HomeViewModel
 
 @Composable
@@ -62,6 +64,7 @@ fun HomeScreen(
     onEditTemplate: (Long) -> Unit,
     onCreateTemplate: () -> Unit,
     onOpenExercise: (String) -> Unit,
+    onNavigateToOnboarding: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val view = LocalView.current
@@ -69,6 +72,7 @@ fun HomeScreen(
     val templates by viewModel.templates.collectAsStateWithLifecycle()
     val recentSessions by viewModel.recentSessions.collectAsStateWithLifecycle()
     val seedState by viewModel.seedState.collectAsStateWithLifecycle()
+    val onboardingCompleted by rememberPreference(PreferenceKeys.ONBOARDING_COMPLETED, false)
 
     Column(
         Modifier
@@ -91,6 +95,11 @@ fun HomeScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 20.dp),
         )
+
+        if (!onboardingCompleted) {
+            HomeOnboardingCard(onGetStarted = { AppHaptics.tap(view); onNavigateToOnboarding() })
+            Spacer(Modifier.height(16.dp))
+        }
 
         // Rapid-start hero: one tap to a blank workout.
         Button(
@@ -300,6 +309,39 @@ fun HomeScreen(
         }
 
         Spacer(Modifier.height(120.dp))
+    }
+}
+
+@Composable
+fun HomeOnboardingCard(
+    onGetStarted: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        shape = listItemShape(0, 1, radius = 16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Personalize your routines?", style = MaterialTheme.typography.titleMedium)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Get personalized workout routines based on your goals.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = onGetStarted,
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text("Get started")
+            }
+        }
     }
 }
 

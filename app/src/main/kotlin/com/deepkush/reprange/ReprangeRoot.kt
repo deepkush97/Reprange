@@ -46,6 +46,7 @@ import com.deepkush.reprange.navigation.ExerciseDetailRoute
 import com.deepkush.reprange.navigation.ExercisePickerRoute
 import com.deepkush.reprange.navigation.HomeRoute
 import com.deepkush.reprange.navigation.LibraryRoute
+import com.deepkush.reprange.navigation.OnboardingRoute
 import com.deepkush.reprange.navigation.ProgressRoute
 import com.deepkush.reprange.navigation.SettingsRoute
 import com.deepkush.reprange.navigation.TemplateBuilderRoute
@@ -58,6 +59,7 @@ import com.deepkush.reprange.ui.component.SessionDock
 import com.deepkush.reprange.ui.screens.exercise.ExerciseDetailScreen
 import com.deepkush.reprange.ui.screens.home.HomeScreen
 import com.deepkush.reprange.ui.screens.library.LibraryScreen
+import com.deepkush.reprange.ui.screens.onboarding.OnboardingScreen
 import com.deepkush.reprange.ui.screens.library.ExercisePickerScreen
 import com.deepkush.reprange.ui.screens.progress.ProgressScreen
 import com.deepkush.reprange.ui.screens.settings.SettingsScreen
@@ -193,7 +195,8 @@ private fun RootComposition(themeColor: androidx.compose.runtime.MutableState<Co
                 )
             }
 
-            val hideDockOnWorkout = currentRouteName?.contains("ActiveWorkout") == true
+            val hideChrome = currentRouteName?.contains("OnboardingRoute") == true || currentRouteName?.contains("ActiveWorkout") == true
+            val hideDockOnWorkout = hideChrome
             if (!hideDockOnWorkout) {
                 SessionDock(
                     modifier = Modifier
@@ -259,6 +262,7 @@ private fun AppNavHost(navController: NavHostController) {
                 onEditTemplate = { id -> navController.navigate(TemplateBuilderRoute(id)) },
                 onCreateTemplate = { navController.navigate(TemplateBuilderRoute(null)) },
                 onOpenExercise = { id -> navController.navigate(ExerciseDetailRoute(id)) },
+                onNavigateToOnboarding = { navController.navigate(OnboardingRoute) },
             )
         }
         composable<LibraryRoute> {
@@ -268,7 +272,12 @@ private fun AppNavHost(navController: NavHostController) {
             ProgressScreen()
         }
         composable<SettingsRoute> {
-            SettingsScreen()
+            SettingsScreen(
+                onNavigateToOnboarding = { navController.navigate(OnboardingRoute) },
+            )
+        }
+        composable<OnboardingRoute> {
+            OnboardingScreen(onFinish = { navController.popBackStack() })
         }
         composable<ExerciseDetailRoute> { entry ->
             val route = entry.toRoute<ExerciseDetailRoute>()
