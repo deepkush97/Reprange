@@ -108,6 +108,38 @@ interface ExerciseDao {
 
     @Query("SELECT DISTINCT equipment FROM exercises ORDER BY equipment")
     fun observeEquipment(): Flow<List<String>>
+
+    @Query(
+        """
+        SELECT * FROM exercises
+        WHERE (target IN (:targets) OR category IN (:targets) OR muscle_group IN (:targets))
+          AND difficulty IN (:difficulties)
+        ORDER BY name
+        LIMIT :limit
+        """,
+    )
+    suspend fun getByTargets(
+        targets: List<String>,
+        difficulties: List<String>,
+        limit: Int,
+    ): List<ExerciseEntity>
+
+    @Query(
+        """
+        SELECT * FROM exercises
+        WHERE (target IN (:targets) OR category IN (:targets) OR muscle_group IN (:targets))
+          AND equipment IN (:equipment)
+          AND difficulty IN (:difficulties)
+        ORDER BY name
+        LIMIT :limit
+        """,
+    )
+    suspend fun getByTargetsFiltered(
+        targets: List<String>,
+        equipment: List<String>,
+        difficulties: List<String>,
+        limit: Int,
+    ): List<ExerciseEntity>
 }
 
 @Dao
