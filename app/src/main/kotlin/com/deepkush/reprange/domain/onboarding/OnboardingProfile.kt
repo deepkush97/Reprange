@@ -29,13 +29,13 @@ fun Split.validForDays(days: Int): Boolean = when (this) {
     Split.PPL -> days >= 3
 }
 
-data class GoalConfig(val sets: Int, val reps: Int, val restSeconds: Int, val strategy: SetStrategy)
+data class GoalConfig(val sets: Int, val repLow: Int, val repHigh: Int, val restSeconds: Int, val strategy: SetStrategy)
 
 fun Goal.config(): GoalConfig = when (this) {
-    Goal.STRENGTH -> GoalConfig(4, 5, 90, SetStrategy.STEP_UP)
-    Goal.HYPERTROPHY -> GoalConfig(3, 10, 90, SetStrategy.STANDARD)
-    Goal.FAT_LOSS -> GoalConfig(3, 13, 60, SetStrategy.STANDARD)
-    Goal.GENERAL_FITNESS -> GoalConfig(3, 10, 90, SetStrategy.STANDARD)
+    Goal.STRENGTH -> GoalConfig(4, 5, 5, 90, SetStrategy.STEP_UP)
+    Goal.HYPERTROPHY -> GoalConfig(3, 8, 12, 90, SetStrategy.STANDARD)
+    Goal.FAT_LOSS -> GoalConfig(3, 12, 15, 60, SetStrategy.STANDARD)
+    Goal.GENERAL_FITNESS -> GoalConfig(3, 10, 10, 90, SetStrategy.STANDARD)
 }
 
 data class OnboardingProfile(
