@@ -276,8 +276,33 @@ private fun AppNavHost(navController: NavHostController) {
                 onNavigateToOnboarding = { navController.navigate(OnboardingRoute) },
             )
         }
-        composable<OnboardingRoute> {
-            OnboardingScreen(onFinish = { navController.popBackStack() })
+        composable<OnboardingRoute> { entry ->
+            val onboardingVm: com.deepkush.reprange.ui.screens.onboarding.OnboardingViewModel =
+                androidx.hilt.navigation.compose.hiltViewModel(entry)
+            val picked by entry.savedStateHandle
+                .getStateFlow("picked_exercise", "")
+                .collectAsStateWithLifecycle()
+            LaunchedEffect(picked) {
+                if (picked.isNotBlank()) {
+                    val tIdx = entry.savedStateHandle.get<Int>("swap_template_idx") ?: -1
+                    val iIdx = entry.savedStateHandle.get<Int>("swap_item_idx") ?: -1
+                    if (tIdx >= 0 && iIdx >= 0) {
+                        onboardingVm.swapExercise(tIdx, iIdx, picked)
+                    }
+                    entry.savedStateHandle["picked_exercise"] = ""
+                    entry.savedStateHandle["swap_template_idx"] = -1
+                    entry.savedStateHandle["swap_item_idx"] = -1
+                }
+            }
+            OnboardingScreen(
+                onFinish = { navController.popBackStack() },
+                onPickExercise = { tIdx, iIdx ->
+                    entry.savedStateHandle["swap_template_idx"] = tIdx
+                    entry.savedStateHandle["swap_item_idx"] = iIdx
+                    navController.navigate(ExercisePickerRoute("template"))
+                },
+                viewModel = onboardingVm,
+            )
         }
         composable<ExerciseDetailRoute> { entry ->
             val route = entry.toRoute<ExerciseDetailRoute>()
