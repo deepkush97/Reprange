@@ -13,13 +13,13 @@ import kotlinx.coroutines.flow.Flow
 annotation class DaosModuleMarker
 
 @javax.inject.Singleton
-class ExerciseRepository @javax.inject.Inject constructor(
+open class ExerciseRepository @javax.inject.Inject constructor(
     private val exerciseDao: ExerciseDao,
     private val seeder: DatasetSeeder,
 ) {
-    val seedState: kotlinx.coroutines.flow.StateFlow<DatasetSeeder.SeedState> get() = seeder.state
+    open val seedState: kotlinx.coroutines.flow.StateFlow<DatasetSeeder.SeedState> get() = seeder.state
 
-    suspend fun seedIfNeeded() = seeder.seedIfNeeded()
+    open suspend fun seedIfNeeded() = seeder.seedIfNeeded()
 
     fun search(query: String, category: String?, equipment: String?, difficulty: String?): Flow<List<ExerciseEntity>> {
         val q = query.trim()

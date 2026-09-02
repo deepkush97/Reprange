@@ -16,16 +16,14 @@ import com.deepkush.reprange.domain.onboarding.validForDays
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     private val recommender: OnboardingRecommender,
-    private val exerciseRepository: ExerciseRepository? = null,
+    private val exerciseRepository: ExerciseRepository,
 ) : ViewModel() {
 
     private val _profile = MutableStateFlow(
@@ -94,13 +92,11 @@ class OnboardingViewModel @Inject constructor(
         }
     }
 
-    val seedState: StateFlow<DatasetSeeder.SeedState> =
-        exerciseRepository?.seedState
-            ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DatasetSeeder.SeedState.Done)
-            ?: MutableStateFlow(DatasetSeeder.SeedState.Done)
+    val seedState: StateFlow<DatasetSeeder.SeedState>
+        get() = exerciseRepository.seedState
 
     fun retrySeed() {
-        viewModelScope.launch { exerciseRepository?.seedIfNeeded() }
+        viewModelScope.launch { exerciseRepository.seedIfNeeded() }
     }
 
     fun swapExercise(templateIndex: Int, itemIndex: Int, newExerciseId: String) {

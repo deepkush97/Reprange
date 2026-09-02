@@ -2,6 +2,9 @@ package com.deepkush.reprange.ui.onboarding
 
 import com.deepkush.reprange.data.db.ExerciseDao
 import com.deepkush.reprange.data.db.ExerciseEntity
+import com.deepkush.reprange.data.remote.DatasetApi
+import com.deepkush.reprange.data.repo.DatasetSeeder
+import com.deepkush.reprange.data.repo.ExerciseRepository
 import com.deepkush.reprange.domain.onboarding.EquipmentProfile
 import com.deepkush.reprange.domain.onboarding.Experience
 import com.deepkush.reprange.domain.onboarding.Goal
@@ -11,6 +14,8 @@ import com.deepkush.reprange.domain.onboarding.validForDays
 import com.deepkush.reprange.ui.screens.onboarding.OnboardingViewModel
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -25,15 +30,38 @@ private class FakeExerciseDao : ExerciseDao {
     override fun countSearch(query: String?, fts: String?, category: String?, equipment: String?, difficulty: String?): Flow<Int> = flowOf(0)
     override fun observeCategories(): Flow<List<String>> = flowOf(emptyList())
     override fun observeEquipment(): Flow<List<String>> = flowOf(emptyList())
+    override suspend fun getByTarget(target: String, difficulties: List<String>, limit: Int): List<ExerciseEntity> = emptyList()
     override suspend fun getByTargets(targets: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> = emptyList()
+    override suspend fun getByTargetFiltered(target: String, equipment: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> = emptyList()
     override suspend fun getByTargetsFiltered(targets: List<String>, equipment: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> = emptyList()
+}
+
+private class FakeExerciseRepository(
+    initialState: DatasetSeeder.SeedState = DatasetSeeder.SeedState.Idle,
+) : ExerciseRepository(
+    exerciseDao = FakeExerciseDao(),
+    seeder = DatasetSeeder(
+        api = object : DatasetApi {
+            override suspend fun exercises() = emptyList<com.deepkush.reprange.data.remote.DatasetExerciseDto>()
+        },
+        exerciseDao = FakeExerciseDao(),
+    ),
+) {
+    private val _state = MutableStateFlow(initialState)
+    override val seedState: StateFlow<DatasetSeeder.SeedState> get() = _state
+    override suspend fun seedIfNeeded() {
+        _state.value = DatasetSeeder.SeedState.Done
+    }
+    fun setState(state: DatasetSeeder.SeedState) { _state.value = state }
 }
 
 class OnboardingViewModelTest {
 
-    private fun createVm(): OnboardingViewModel {
-        val dao = FakeExerciseDao()
-        return OnboardingViewModel(OnboardingRecommender(dao))
+    private fun createVm(
+        dao: ExerciseDao = FakeExerciseDao(),
+        repo: ExerciseRepository = FakeExerciseRepository(DatasetSeeder.SeedState.Done),
+    ): OnboardingViewModel {
+        return OnboardingViewModel(OnboardingRecommender(dao), repo)
     }
 
     @Test
@@ -125,6 +153,19 @@ class OnboardingViewModelTest {
     fun viewModel_generatePreview_setsPreview() = runTest {
         // Use a fake dao that returns some data
         val dao = object : ExerciseDao by FakeExerciseDao() {
+            override suspend fun getByTarget(target: String, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
+                return listOf(
+                    exerciseEntity("1", "chest"),
+                    exerciseEntity("2", "back"),
+                    exerciseEntity("3", "shoulders"),
+                    exerciseEntity("4", "upper legs"),
+                    exerciseEntity("5", "waist"),
+                    exerciseEntity("6", "upper arms"),
+                ).filter { e -> e.category.equals(target, ignoreCase = true) || e.target.equals(target, ignoreCase = true) }.take(limit)
+            }
+            override suspend fun getByTargetFiltered(target: String, equipment: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
+                return getByTarget(target, difficulties, limit)
+            }
             override suspend fun getByTargets(targets: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
                 // return minimal exercise per target to satisfy buckets
                 return listOf(
@@ -134,14 +175,14 @@ class OnboardingViewModelTest {
                     exerciseEntity("4", "upper legs"),
                     exerciseEntity("5", "waist"),
                     exerciseEntity("6", "upper arms"),
-                ).filter { e -> targets.any { t -> e.category == t || e.target == t } }.take(limit)
+                ).filter { e -> targets.any { t -> e.category.equals(t, ignoreCase = true) || e.target.equals(t, ignoreCase = true) } }.take(limit)
             }
             override suspend fun getByTargetsFiltered(targets: List<String>, equipment: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
                 return getByTargets(targets, difficulties, limit)
             }
         }
         // For FULL_GYM profile, recommender will query getByTargets
-        val vm = OnboardingViewModel(OnboardingRecommender(dao))
+        val vm = createVm(dao = dao)
         vm.setDays(3)
         // ensure split is FULL_BODY
         vm.setSplit(Split.FULL_BODY)
@@ -154,6 +195,19 @@ class OnboardingViewModelTest {
     @Test
     fun viewModel_swapExercise_replacesId() = runTest {
         val dao = object : ExerciseDao by FakeExerciseDao() {
+            override suspend fun getByTarget(target: String, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
+                return listOf(
+                    exerciseEntity("1", "chest"),
+                    exerciseEntity("2", "back"),
+                    exerciseEntity("3", "shoulders"),
+                    exerciseEntity("4", "upper legs"),
+                    exerciseEntity("5", "waist"),
+                    exerciseEntity("6", "upper arms"),
+                ).filter { e -> e.category.equals(target, ignoreCase = true) || e.target.equals(target, ignoreCase = true) }.take(limit)
+            }
+            override suspend fun getByTargetFiltered(target: String, equipment: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
+                return getByTarget(target, difficulties, limit)
+            }
             override suspend fun getByTargets(targets: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
                 return listOf(
                     exerciseEntity("1", "chest"),
@@ -162,13 +216,13 @@ class OnboardingViewModelTest {
                     exerciseEntity("4", "upper legs"),
                     exerciseEntity("5", "waist"),
                     exerciseEntity("6", "upper arms"),
-                ).filter { e -> targets.any { t -> e.category == t || e.target == t } }.take(limit)
+                ).filter { e -> targets.any { t -> e.category.equals(t, ignoreCase = true) || e.target.equals(t, ignoreCase = true) } }.take(limit)
             }
             override suspend fun getByTargetsFiltered(targets: List<String>, equipment: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
                 return getByTargets(targets, difficulties, limit)
             }
         }
-        val vm = OnboardingViewModel(OnboardingRecommender(dao))
+        val vm = createVm(dao = dao)
         vm.generatePreview()
         val before = vm.preview.value?.firstOrNull()?.items?.firstOrNull()?.exerciseId
         assertThat(before).isNotNull()

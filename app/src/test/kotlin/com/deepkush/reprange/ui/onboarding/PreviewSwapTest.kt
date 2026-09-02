@@ -2,6 +2,9 @@ package com.deepkush.reprange.ui.onboarding
 
 import com.deepkush.reprange.data.db.ExerciseDao
 import com.deepkush.reprange.data.db.ExerciseEntity
+import com.deepkush.reprange.data.remote.DatasetApi
+import com.deepkush.reprange.data.repo.DatasetSeeder
+import com.deepkush.reprange.data.repo.ExerciseRepository
 import com.deepkush.reprange.domain.onboarding.EquipmentProfile
 import com.deepkush.reprange.domain.onboarding.Experience
 import com.deepkush.reprange.domain.onboarding.Goal
@@ -10,6 +13,8 @@ import com.deepkush.reprange.domain.onboarding.Split
 import com.deepkush.reprange.ui.screens.onboarding.OnboardingViewModel
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -24,6 +29,22 @@ private class FakeExerciseDaoForPreview : ExerciseDao {
     override fun countSearch(query: String?, fts: String?, category: String?, equipment: String?, difficulty: String?): Flow<Int> = flowOf(0)
     override fun observeCategories(): Flow<List<String>> = flowOf(emptyList())
     override fun observeEquipment(): Flow<List<String>> = flowOf(emptyList())
+    override suspend fun getByTarget(target: String, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
+        val all = listOf(
+            exerciseEntity("1", "chest"),
+            exerciseEntity("2", "back"),
+            exerciseEntity("3", "shoulders"),
+            exerciseEntity("4", "upper legs"),
+            exerciseEntity("5", "waist"),
+            exerciseEntity("6", "upper arms"),
+            exerciseEntity("7", "lower legs"),
+            exerciseEntity("8", "chest2"),
+            exerciseEntity("9", "back2"),
+            exerciseEntity("10", "triceps"),
+            exerciseEntity("11", "biceps"),
+        )
+        return all.filter { e -> e.category.equals(target, ignoreCase = true) || e.target.equals(target, ignoreCase = true) }.take(limit)
+    }
     override suspend fun getByTargets(targets: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
         val all = listOf(
             exerciseEntity("1", "chest"),
@@ -38,7 +59,10 @@ private class FakeExerciseDaoForPreview : ExerciseDao {
             exerciseEntity("10", "triceps"),
             exerciseEntity("11", "biceps"),
         )
-        return all.filter { e -> targets.any { t -> e.category == t || e.target == t } }.take(limit)
+        return all.filter { e -> targets.any { t -> e.category.equals(t, ignoreCase = true) || e.target.equals(t, ignoreCase = true) } }.take(limit)
+    }
+    override suspend fun getByTargetFiltered(target: String, equipment: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
+        return getByTarget(target, difficulties, limit)
     }
     override suspend fun getByTargetsFiltered(targets: List<String>, equipment: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
         return getByTargets(targets, difficulties, limit)
@@ -60,11 +84,23 @@ private class FakeExerciseDaoForPreview : ExerciseDao {
     )
 }
 
+private class FakeExerciseRepositoryPreview : ExerciseRepository(
+    exerciseDao = FakeExerciseDaoForPreview(),
+    seeder = DatasetSeeder(
+        api = object : DatasetApi { override suspend fun exercises() = emptyList<com.deepkush.reprange.data.remote.DatasetExerciseDto>() },
+        exerciseDao = FakeExerciseDaoForPreview(),
+    ),
+) {
+    private val _state = MutableStateFlow(DatasetSeeder.SeedState.Done)
+    override val seedState: StateFlow<DatasetSeeder.SeedState> get() = _state
+    override suspend fun seedIfNeeded() { _state.value = DatasetSeeder.SeedState.Done }
+}
+
 class PreviewSwapTest {
     @Test fun preview_swap_replacesExercise() = runTest {
         val dao = FakeExerciseDaoForPreview()
         val engine = OnboardingRecommender(dao)
-        val vm = OnboardingViewModel(engine)
+        val vm = OnboardingViewModel(engine, FakeExerciseRepositoryPreview())
         vm.setGoal(Goal.HYPERTROPHY)
         vm.setExperience(Experience.BEGINNER)
         vm.setEquipment(EquipmentProfile.FULL_GYM)

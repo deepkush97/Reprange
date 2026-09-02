@@ -14,10 +14,17 @@ private class FakeExerciseDao(
 ) : ExerciseDao {
     val ids: Set<String> get() = exercises.map { it.id }.toSet()
 
+    private fun matchesTarget(e: ExerciseEntity, target: String): Boolean {
+        val t = target.lowercase()
+        // Mirrors Daos.kt: LOWER(target)=LOWER(:target) OR LOWER(category)=... OR LOWER(secondary_muscles) LIKE '%'||LOWER(:target)||'%'
+        return e.target.lowercase() == t || e.category.lowercase() == t || e.muscleGroup.lowercase() == t ||
+            e.secondaryMuscles.any { it.lowercase().contains(t) } ||
+            // Also check JSON string LIKE for completeness (secondary_muscles stored as JSON array string)
+            e.secondaryMuscles.joinToString(",").lowercase().contains(t)
+    }
+
     private fun matchesTargets(e: ExerciseEntity, targets: List<String>): Boolean {
-        val t = targets.map { it.lowercase() }.toSet()
-        return e.target.lowercase() in t || e.category.lowercase() in t || e.muscleGroup.lowercase() in t ||
-            e.secondaryMuscles.any { it.lowercase() in t }
+        return targets.any { t -> matchesTarget(e, t) }
     }
 
     override suspend fun count(): Int = exercises.size
@@ -29,18 +36,50 @@ private class FakeExerciseDao(
     override fun countSearch(query: String?, fts: String?, category: String?, equipment: String?, difficulty: String?): Flow<Int> = flowOf(0)
     override fun observeCategories(): Flow<List<String>> = flowOf(exercises.map { it.category }.distinct())
     override fun observeEquipment(): Flow<List<String>> = flowOf(exercises.map { it.equipment }.distinct())
-    override suspend fun getByTargets(targets: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
+    override suspend fun getByTarget(target: String, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
         val diffs = difficulties.map { it.uppercase() }.toSet()
-        return exercises.filter { it.difficulty.uppercase() in diffs && matchesTargets(it, targets) }
+        return exercises.filter { it.difficulty.uppercase() in diffs && matchesTarget(it, target) }
             .sortedBy { it.name }
             .take(limit)
     }
-    override suspend fun getByTargetsFiltered(targets: List<String>, equipment: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
+
+    override suspend fun getByTargets(targets: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
+        if (targets.isEmpty()) return emptyList()
+        val seen = mutableSetOf<String>()
+        val out = mutableListOf<ExerciseEntity>()
+        val diffs = difficulties.map { it.uppercase() }.toSet()
+        for (t in targets) {
+            val batch = exercises.filter { it.difficulty.uppercase() in diffs && matchesTarget(it, t) }
+                .sortedBy { it.name }
+                .take(limit)
+            for (e in batch) if (seen.add(e.id)) out.add(e)
+            if (out.size >= limit) break
+        }
+        return out.sortedBy { it.name }.take(limit)
+    }
+
+    override suspend fun getByTargetFiltered(target: String, equipment: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
         val eq = equipment.map { it.lowercase() }.toSet()
         val diffs = difficulties.map { it.uppercase() }.toSet()
-        return exercises.filter { it.equipment.lowercase() in eq && it.difficulty.uppercase() in diffs && matchesTargets(it, targets) }
+        return exercises.filter { it.equipment.lowercase() in eq && it.difficulty.uppercase() in diffs && matchesTarget(it, target) }
             .sortedBy { it.name }
             .take(limit)
+    }
+
+    override suspend fun getByTargetsFiltered(targets: List<String>, equipment: List<String>, difficulties: List<String>, limit: Int): List<ExerciseEntity> {
+        if (targets.isEmpty()) return emptyList()
+        val eq = equipment.map { it.lowercase() }.toSet()
+        val diffs = difficulties.map { it.uppercase() }.toSet()
+        val seen = mutableSetOf<String>()
+        val out = mutableListOf<ExerciseEntity>()
+        for (t in targets) {
+            val batch = exercises.filter { it.equipment.lowercase() in eq && it.difficulty.uppercase() in diffs && matchesTarget(it, t) }
+                .sortedBy { it.name }
+                .take(limit)
+            for (e in batch) if (seen.add(e.id)) out.add(e)
+            if (out.size >= limit) break
+        }
+        return out.sortedBy { it.name }.take(limit)
     }
 }
 

@@ -112,36 +112,70 @@ interface ExerciseDao {
     @Query(
         """
         SELECT * FROM exercises
-        WHERE (target IN (:targets) OR category IN (:targets) OR muscle_group IN (:targets)
-               OR EXISTS (SELECT 1 FROM json_each(secondary_muscles) WHERE value IN (:targets)))
+        WHERE (LOWER(target) = LOWER(:target) OR LOWER(category) = LOWER(:target) OR LOWER(muscle_group) = LOWER(:target)
+               OR LOWER(secondary_muscles) LIKE '%' || LOWER(:target) || '%')
           AND difficulty IN (:difficulties)
         ORDER BY name
         LIMIT :limit
         """,
     )
-    suspend fun getByTargets(
-        targets: List<String>,
+    suspend fun getByTarget(
+        target: String,
         difficulties: List<String>,
         limit: Int,
     ): List<ExerciseEntity>
 
+    suspend fun getByTargets(
+        targets: List<String>,
+        difficulties: List<String>,
+        limit: Int,
+    ): List<ExerciseEntity> {
+        if (targets.isEmpty()) return emptyList()
+        val seen = mutableSetOf<String>()
+        val out = mutableListOf<ExerciseEntity>()
+        for (t in targets) {
+            val batch = getByTarget(t, difficulties, limit)
+            for (e in batch) if (seen.add(e.id)) out.add(e)
+            if (out.size >= limit) break
+        }
+        return out.sortedBy { it.name }.take(limit)
+    }
+
     @Query(
         """
         SELECT * FROM exercises
-        WHERE (target IN (:targets) OR category IN (:targets) OR muscle_group IN (:targets)
-               OR EXISTS (SELECT 1 FROM json_each(secondary_muscles) WHERE value IN (:targets)))
-          AND equipment IN (:equipment)
+        WHERE (LOWER(target) = LOWER(:target) OR LOWER(category) = LOWER(:target) OR LOWER(muscle_group) = LOWER(:target)
+               OR LOWER(secondary_muscles) LIKE '%' || LOWER(:target) || '%')
+          AND LOWER(equipment) IN (:equipment)
           AND difficulty IN (:difficulties)
         ORDER BY name
         LIMIT :limit
         """,
     )
+    suspend fun getByTargetFiltered(
+        target: String,
+        equipment: List<String>,
+        difficulties: List<String>,
+        limit: Int,
+    ): List<ExerciseEntity>
+
     suspend fun getByTargetsFiltered(
         targets: List<String>,
         equipment: List<String>,
         difficulties: List<String>,
         limit: Int,
-    ): List<ExerciseEntity>
+    ): List<ExerciseEntity> {
+        if (targets.isEmpty()) return emptyList()
+        val eqLower = equipment.map { it.lowercase() }
+        val seen = mutableSetOf<String>()
+        val out = mutableListOf<ExerciseEntity>()
+        for (t in targets) {
+            val batch = getByTargetFiltered(t, eqLower, difficulties, limit)
+            for (e in batch) if (seen.add(e.id)) out.add(e)
+            if (out.size >= limit) break
+        }
+        return out.sortedBy { it.name }.take(limit)
+    }
 }
 
 @Dao
