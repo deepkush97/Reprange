@@ -36,6 +36,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -63,13 +65,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
-import androidx.datastore.preferences.core.edit
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.deepkush.reprange.constants.PreferenceKeys
+import com.deepkush.reprange.data.db.ExerciseEntity
 import com.deepkush.reprange.data.repo.DatasetSeeder
 import com.deepkush.reprange.domain.onboarding.EquipmentProfile
 import com.deepkush.reprange.domain.onboarding.Experience
@@ -78,19 +78,7 @@ import com.deepkush.reprange.domain.onboarding.Split
 import com.deepkush.reprange.domain.onboarding.validForDays
 import com.deepkush.reprange.ui.component.LocalAppWindowInsets
 import com.deepkush.reprange.utils.AppHaptics
-import com.deepkush.reprange.utils.dataStore
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.launch
-
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface OnboardingEntryPoint {
-    fun createWorkoutPlanUseCase(): com.deepkush.reprange.domain.usecase.CreateWorkoutPlanUseCase
-    fun exerciseRepository(): com.deepkush.reprange.data.repo.ExerciseRepository
-}
 
 @Composable
 fun OnboardingScreen(
@@ -102,13 +90,13 @@ fun OnboardingScreen(
     val currentStep by viewModel.currentStep.collectAsStateWithLifecycle()
     val preview by viewModel.preview.collectAsStateWithLifecycle()
     val seedState by viewModel.seedState.collectAsStateWithLifecycle()
+    val exerciseMap by viewModel.exerciseMap.collectAsStateWithLifecycle()
+    val previewError by viewModel.previewError.collectAsStateWithLifecycle()
+    val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
+    val isGeneratingPreview by viewModel.isGeneratingPreview.collectAsStateWithLifecycle()
     val view = LocalView.current
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    var previewError by remember { mutableStateOf<String?>(null) }
-    var isGeneratingPreview by remember { mutableStateOf(false) }
-    var isSaving by remember { mutableStateOf(false) }
     var showPreview by rememberSaveable { mutableStateOf(false) }
 
     // Auto-show preview when it becomes non-null (after generation)
@@ -116,28 +104,8 @@ fun OnboardingScreen(
         if (preview != null) showPreview = true
     }
 
-    fun persistAndFinish(skipBatch: Boolean = false) {
-        scope.launch {
-            context.dataStore.edit { prefs ->
-                prefs[PreferenceKeys.ONBOARDING_COMPLETED] = true
-                prefs[PreferenceKeys.ONBOARDING_GOAL] = profile.goal.name
-                prefs[PreferenceKeys.ONBOARDING_EXPERIENCE] = profile.experience.name
-                prefs[PreferenceKeys.ONBOARDING_EQUIPMENT] = profile.equipment.name
-                prefs[PreferenceKeys.ONBOARDING_DAYS] = profile.days
-                prefs[PreferenceKeys.ONBOARDING_SPLIT] = profile.split.name
-            }
-            onFinish()
-        }
-    }
-
-    fun onSkip() {
-        AppHaptics.tap(view)
-        scope.launch {
-            context.dataStore.edit { prefs ->
-                prefs[PreferenceKeys.ONBOARDING_COMPLETED] = true
-            }
-            onFinish()
-        }
+    LaunchedEffect(previewError) {
+        previewError?.let { snackbarHostState.showSnackbar(it) }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -248,10 +216,10 @@ fun OnboardingScreen(
                                 )
                             }
                             itemsIndexed(template.items, key = { idx, item -> "$page-$idx-${item.exerciseId}" }) { itemIndex, item ->
-                                // Reuse ExerciseRow pattern: Card with exercise info + swap IconButton
-                                // PreviewExerciseRow shows exerciseId and PlanItem details; swap via ExercisePicker.
+                                val exercise = remember(item.exerciseId, exerciseMap) { exerciseMap[item.exerciseId] }
                                 PreviewExerciseRow(
                                     exerciseId = item.exerciseId,
+                                    exercise = exercise,
                                     setCount = item.setCount,
                                     reps = item.targetReps,
                                     restSeconds = item.restSeconds,
@@ -299,43 +267,21 @@ fun OnboardingScreen(
                         onClick = {
                             AppHaptics.primaryTap(view)
                             scope.launch {
-                                isSaving = true
-                                previewError = null
-                                try {
-                                    val entryPoint = EntryPointAccessors.fromApplication(
-                                        context.applicationContext,
-                                        OnboardingEntryPoint::class.java,
-                                    )
-                                    val useCase = entryPoint.createWorkoutPlanUseCase()
-                                    val currentPreview = viewModel.preview.value
-                                    if (currentPreview.isNullOrEmpty()) {
-                                        previewError = "Nothing to save."
-                                        snackbarHostState.showSnackbar("Nothing to save.")
-                                        return@launch
-                                    }
-                                    currentPreview.forEach { tmpl ->
-                                        useCase(null, tmpl.title, "", tmpl.items)
-                                    }
-                                    context.dataStore.edit { prefs ->
-                                        prefs[PreferenceKeys.ONBOARDING_COMPLETED] = true
-                                        prefs[PreferenceKeys.ONBOARDING_GOAL] = profile.goal.name
-                                        prefs[PreferenceKeys.ONBOARDING_EXPERIENCE] = profile.experience.name
-                                        prefs[PreferenceKeys.ONBOARDING_EQUIPMENT] = profile.equipment.name
-                                        prefs[PreferenceKeys.ONBOARDING_DAYS] = profile.days
-                                        prefs[PreferenceKeys.ONBOARDING_SPLIT] = profile.split.name
-                                    }
+                                val result = viewModel.saveAll()
+                                if (result.isSuccess) {
                                     onFinish()
-                                } catch (e: Exception) {
-                                    val msg = e.message ?: "Failed to save routines."
-                                    previewError = msg
+                                } else {
+                                    val msg = viewModel.previewError.value ?: "Failed to save routines."
                                     snackbarHostState.showSnackbar(msg)
-                                } finally {
-                                    isSaving = false
                                 }
                             }
                         },
                         enabled = !isSaving,
                     ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                        }
                         Text(if (templates.size == 1) "Create routine" else "Create ${templates.size} routines")
                     }
                 }
@@ -482,7 +428,13 @@ fun OnboardingScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = ::onSkip) {
+                    TextButton(onClick = {
+                        AppHaptics.tap(view)
+                        scope.launch {
+                            viewModel.skipOnboarding()
+                            onFinish()
+                        }
+                    }) {
                         Text("Skip")
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -495,28 +447,22 @@ fun OnboardingScreen(
                             onClick = {
                                 AppHaptics.primaryTap(view)
                                 if (currentStep < 4) {
-                                    previewError = null
+                                    viewModel.clearPreviewError()
                                     viewModel.nextStep()
                                 } else {
                                     scope.launch {
-                                        isGeneratingPreview = true
-                                        previewError = null
                                         try {
                                             viewModel.generatePreview()
                                             val result = viewModel.preview.value
                                             if (result == null || result.isEmpty()) {
                                                 val msg = "Failed to generate preview. Please try again."
-                                                previewError = msg
                                                 snackbarHostState.showSnackbar(msg)
                                             } else {
                                                 showPreview = true
                                             }
                                         } catch (e: Exception) {
                                             val msg = e.message ?: "Failed to generate preview. Please try again."
-                                            previewError = msg
                                             snackbarHostState.showSnackbar(msg)
-                                        } finally {
-                                            isGeneratingPreview = false
                                         }
                                     }
                                 }
@@ -546,13 +492,23 @@ fun OnboardingScreen(
 @Composable
 private fun PreviewExerciseRow(
     exerciseId: String,
+    exercise: ExerciseEntity?,
     setCount: Int,
     reps: Int?,
     restSeconds: Int?,
     strategy: String,
     onSwap: () -> Unit,
 ) {
-    // Reuse pattern from LibraryScreen ExerciseRow: Card with surfaceVariant, rounded corners, swap IconButton.
+    // Reuse ExerciseRow visual pattern: Card with surfaceVariant, rounded corners, swap IconButton.
+    // Lookup ExerciseEntity for display; fallback to raw id.
+    val title = remember(exercise, exerciseId) { exercise?.name ?: exerciseId }
+    val subtitle = remember(exercise) {
+        if (exercise != null) {
+            "${exercise.muscleGroup.replaceFirstChar { it.uppercase() }} · ${exercise.equipment.replaceFirstChar { it.uppercase() }}"
+        } else {
+            "Unknown exercise"
+        }
+    }
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)),
@@ -561,18 +517,51 @@ private fun PreviewExerciseRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(10.dp)) {
             Column(Modifier.weight(1f)) {
-                Text(exerciseId, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
                 Text(
-                    buildString {
-                        append("$setCount sets")
-                        if (reps != null) append(" · $reps reps")
-                        if (restSeconds != null) append(" · ${restSeconds}s rest")
-                        append(" · $strategy")
-                    },
+                    subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(top = 4.dp),
+                ) {
+                    if (exercise != null) {
+                        AssistChip(
+                            onClick = {},
+                            label = { Text(exercise.equipment, style = MaterialTheme.typography.labelSmall) },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            ),
+                            border = null,
+                            modifier = Modifier.height(22.dp),
+                        )
+                        AssistChip(
+                            onClick = {},
+                            label = { Text(exercise.muscleGroup, style = MaterialTheme.typography.labelSmall) },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            ),
+                            border = null,
+                            modifier = Modifier.height(22.dp),
+                        )
+                    }
+                    Text(
+                        buildString {
+                            append("$setCount sets")
+                            if (reps != null) append(" · $reps reps")
+                            if (restSeconds != null) append(" · ${restSeconds}s rest")
+                            append(" · $strategy")
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
             }
             IconButton(onClick = onSwap) {
                 Icon(Icons.Filled.SwapHoriz, contentDescription = "Swap exercise")
