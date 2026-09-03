@@ -37,7 +37,8 @@ object Formatters {
     fun restCountdown(seconds: Int): String = durationSeconds(seconds.toLong())
 
     fun date(tsMillis: Long): String =
-        android.text.format.DateFormat.getDateFormat(null).format(java.util.Date(tsMillis))
+        java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, Locale.getDefault())
+            .format(java.util.Date(tsMillis))
 
     fun relativeDay(tsMillis: Long, now: Long = System.currentTimeMillis()): String {
         val diffDays = ((now - tsMillis) / 86_400_000L).toInt()

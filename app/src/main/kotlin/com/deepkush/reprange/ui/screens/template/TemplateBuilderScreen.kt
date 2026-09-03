@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -60,6 +61,7 @@ fun TemplateBuilderScreen(
     templateId: Long?,
     onDone: () -> Unit,
     onPickExercise: () -> Unit,
+    onExerciseClick: (String) -> Unit = {},
     viewModel: TemplateBuilderViewModel = hiltViewModel(),
 ) {
     val view = LocalView.current
@@ -144,7 +146,22 @@ fun TemplateBuilderScreen(
                             )
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.clickable {
+                                        AppHaptics.tap(view)
+                                        onExerciseClick(entry.exerciseId)
+                                    },
+                                ) {
+                                    Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                                    Spacer(Modifier.width(4.dp))
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.OpenInNew,
+                                        contentDescription = "View details",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(12.dp),
+                                    )
+                                }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     // Sets stepper.
                                     SmallStepButton("−") { AppHaptics.segmentTick(view); viewModel.changeSetCount(index, -1) }

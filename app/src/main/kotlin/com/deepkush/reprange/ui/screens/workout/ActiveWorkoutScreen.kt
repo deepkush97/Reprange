@@ -69,6 +69,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepkush.reprange.constants.PreferenceKeys
 import com.deepkush.reprange.utils.rememberPreference
 import com.deepkush.reprange.constants.WeightUnit
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
@@ -95,6 +96,7 @@ private fun LoggedSetType.icon(): androidx.compose.ui.graphics.vector.ImageVecto
 fun ActiveWorkoutScreen(
     onFinish: () -> Unit,
     onPickExercise: () -> Unit,
+    onExerciseClick: (String) -> Unit = {},
     viewModel: ActiveSessionViewModel = hiltViewModel(),
 ) {
     val view = LocalView.current
@@ -189,6 +191,7 @@ fun ActiveWorkoutScreen(
                         viewModel = viewModel,
                         displayName = exerciseNames[item.entry.exerciseId] ?: item.entry.exerciseId,
                         onRemoved = { viewModel.removeEntry(item.entry) },
+                        onExerciseClick = onExerciseClick,
                     )
                 }
 
@@ -308,6 +311,7 @@ private fun ExerciseEntryCard(
     viewModel: ActiveSessionViewModel,
     displayName: String,
     onRemoved: () -> Unit,
+    onExerciseClick: (String) -> Unit = {},
 ) {
     val view = LocalView.current
     val entry = item.entry
@@ -394,12 +398,29 @@ private fun ExerciseEntryCard(
                     Text("${index + 1}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 }
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    displayName.replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                            AppHaptics.tap(view)
+                            onExerciseClick(entry.exerciseId)
+                        },
+                ) {
+                    Text(
+                        displayName.replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = "View details",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
                 if (strategy != SetStrategy.STANDARD) {
                     Text(
                         strategy.label,

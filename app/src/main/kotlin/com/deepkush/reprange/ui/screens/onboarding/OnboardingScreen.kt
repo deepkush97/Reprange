@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -84,6 +85,7 @@ import kotlinx.coroutines.launch
 fun OnboardingScreen(
     onFinish: () -> Unit,
     onPickExercise: (templateIndex: Int, itemIndex: Int) -> Unit = { _, _ -> },
+    onExerciseClick: (String) -> Unit = {},
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
     val profile by viewModel.profile.collectAsStateWithLifecycle()
@@ -228,6 +230,7 @@ fun OnboardingScreen(
                                         AppHaptics.tap(view)
                                         onPickExercise(page, itemIndex)
                                     },
+                                    onExerciseClick = onExerciseClick,
                                 )
                             }
                             // Short-list placeholder: if bucket was empty (even after fallback), show "+ Add exercise"
@@ -498,7 +501,9 @@ private fun PreviewExerciseRow(
     restSeconds: Int?,
     strategy: String,
     onSwap: () -> Unit,
+    onExerciseClick: (String) -> Unit = {},
 ) {
+    val view = LocalView.current
     // Reuse ExerciseRow visual pattern: Card with surfaceVariant, rounded corners, swap IconButton.
     // Lookup ExerciseEntity for display; fallback to raw id.
     val title = remember(exercise, exerciseId) { exercise?.name ?: exerciseId }
@@ -517,7 +522,22 @@ private fun PreviewExerciseRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(10.dp)) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
+                        AppHaptics.tap(view)
+                        onExerciseClick(exerciseId)
+                    },
+                ) {
+                    Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = "View details",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,

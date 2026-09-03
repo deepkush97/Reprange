@@ -269,7 +269,7 @@ private fun AppNavHost(navController: NavHostController) {
             LibraryScreen(onOpenExercise = { id -> navController.navigate(ExerciseDetailRoute(id)) })
         }
         composable<ProgressRoute> {
-            ProgressScreen()
+            ProgressScreen(onExerciseClick = { id -> navController.navigate(ExerciseDetailRoute(id)) })
         }
         composable<SettingsRoute> {
             SettingsScreen(
@@ -301,6 +301,7 @@ private fun AppNavHost(navController: NavHostController) {
                     entry.savedStateHandle["swap_item_idx"] = iIdx
                     navController.navigate(ExercisePickerRoute("template"))
                 },
+                onExerciseClick = { id -> navController.navigate(ExerciseDetailRoute(id)) },
                 viewModel = onboardingVm,
             )
         }
@@ -329,6 +330,7 @@ private fun AppNavHost(navController: NavHostController) {
             ActiveWorkoutScreen(
                 onFinish = { navController.popBackStack() },
                 onPickExercise = { navController.navigate(ExercisePickerRoute("session")) },
+                onExerciseClick = { id -> navController.navigate(ExerciseDetailRoute(id)) },
             )
         }
         composable<TemplateBuilderRoute> { entry ->
@@ -348,6 +350,7 @@ private fun AppNavHost(navController: NavHostController) {
                 templateId = route.templateId,
                 onDone = { navController.popBackStack() },
                 onPickExercise = { navController.navigate(ExercisePickerRoute("template")) },
+                onExerciseClick = { id -> navController.navigate(ExerciseDetailRoute(id)) },
                 viewModel = builderVm,
             )
         }

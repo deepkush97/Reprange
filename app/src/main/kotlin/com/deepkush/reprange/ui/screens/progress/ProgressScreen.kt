@@ -3,6 +3,7 @@ package com.deepkush.reprange.ui.screens.progress
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material3.Card
@@ -50,6 +52,7 @@ import com.deepkush.reprange.utils.listItemShape
 
 @Composable
 fun ProgressScreen(
+    onExerciseClick: (String) -> Unit = {},
     viewModel: com.deepkush.reprange.viewmodels.ProgressViewModel = hiltViewModel(),
 ) {
     val view = LocalView.current
@@ -99,6 +102,10 @@ fun ProgressScreen(
             )
             prs.take(12).forEachIndexed { index, pr ->
                 Card(
+                    onClick = {
+                        AppHaptics.tap(view)
+                        onExerciseClick(pr.exerciseId)
+                    },
                     shape = listItemShape(index, minOf(prs.size, 12)),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -115,7 +122,16 @@ fun ProgressScreen(
                         )
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(pr.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(pr.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    Icons.AutoMirrored.Filled.OpenInNew,
+                                    contentDescription = "View details",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
                             Text(
                                 "Best ${Formatters.weight(pr.bestWeightKg, unit)} × ${pr.bestReps}",
                                 style = MaterialTheme.typography.bodySmall,
