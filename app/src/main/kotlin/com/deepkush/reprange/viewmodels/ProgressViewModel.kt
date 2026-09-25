@@ -41,6 +41,24 @@ class ProgressViewModel @Inject constructor(
     private val _personalRecords = MutableStateFlow<List<PrWithExercise>>(emptyList())
     val personalRecords: StateFlow<List<PrWithExercise>> = _personalRecords
 
+    /** Exercise selected for the 1RM-over-time chart; defaults to the top PR. */
+    private val _selectedExerciseId = MutableStateFlow<String?>(null)
+    val selectedExerciseId: StateFlow<String?> = _selectedExerciseId
+
+    /** Estimated 1RM series for the selected exercise (day buckets, best Epley per day). */
+    private val _oneRmSeries = MutableStateFlow<List<Pair<Long, Double>>>(emptyList())
+    val oneRmSeries: StateFlow<List<Pair<Long, Double>>> = _oneRmSeries
+
+    fun selectExercise(exerciseId: String) {
+        _selectedExerciseId.value = exerciseId
+        viewModelScope.launch {
+            _oneRmSeries.value = calculateProgressUseCase.est1RmSeries(
+                exerciseId,
+                System.currentTimeMillis() - ONE_RM_HISTORY_MILLIS,
+            )
+        }
+    }
+
     init {
         viewModelScope.launch {
             _weeklyVolume.value = calculateProgressUseCase.weeklyVolume(weeks = 10)
@@ -66,7 +84,15 @@ class ProgressViewModel @Inject constructor(
                             )
                         }
                     }
+                if (_selectedExerciseId.value == null) {
+                    _personalRecords.value.firstOrNull()?.exerciseId?.let { selectExercise(it) }
+                }
             }
         }
+    }
+
+    companion object {
+        /** Lookback window for the 1RM-over-time chart (90 days). */
+        const val ONE_RM_HISTORY_MILLIS = 90L * 24L * 3600_000L
     }
 }

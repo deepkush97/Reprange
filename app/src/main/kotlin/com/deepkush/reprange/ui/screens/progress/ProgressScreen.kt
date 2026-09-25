@@ -59,6 +59,8 @@ fun ProgressScreen(
     val totals by viewModel.totals.collectAsStateWithLifecycle()
     val weekly by viewModel.weeklyVolume.collectAsStateWithLifecycle()
     val prs by viewModel.personalRecords.collectAsStateWithLifecycle()
+    val selectedExerciseId by viewModel.selectedExerciseId.collectAsStateWithLifecycle()
+    val oneRmSeries by viewModel.oneRmSeries.collectAsStateWithLifecycle()
     val (unit, _) = com.deepkush.reprange.utils.rememberEnumPreference(PreferenceKeys.WEIGHT_UNIT, WeightUnit.KG)
 
     Column(
@@ -91,6 +93,20 @@ fun ProgressScreen(
             modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),
         )
         WeeklyVolumeChart(weekly.map { it.volumeKg }, unit)
+
+        if (prs.isNotEmpty()) {
+            Spacer(Modifier.height(20.dp))
+            ExerciseOneRmSection(
+                prs = prs,
+                selectedId = selectedExerciseId,
+                series = oneRmSeries,
+                unit = unit,
+                onSelect = {
+                    AppHaptics.tap(view)
+                    viewModel.selectExercise(it)
+                },
+            )
+        }
 
         if (prs.isNotEmpty()) {
             Spacer(Modifier.height(20.dp))
