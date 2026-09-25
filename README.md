@@ -38,24 +38,47 @@ animations. Dark-theme first, fully edge-to-edge, and themed by Material You.
 - **PR detection** — every logged set is compared against your history (Epley estimated
   1RM); new records trigger a celebration haptic + snackbar
 - Swipe-to-delete on logged sets; elapsed timer and live volume totals
+- **Superset grouping** — consecutive `SUPER_SET` exercises sharing a group show a
+  `Superset X` label; a **Next Up** indicator alternates within the group
+  (wrapping A→B→A) or points at the next exercise, and hides on the last one
 
 ### 📋 Plan ahead (routines)
 - Build routines once (name, notes, exercises, sets, set strategy) and start them in one tap
 - Set strategies: **Standard, Step-up (pyramid — auto-escalates +2.5 kg per set),
   Drop set, Super set, Failure**
 
+### 🧭 Onboarding (recommended routines)
+- Optional 5-question wizard (goal, experience, equipment, days/week 2–6, split);
+  never a gate — entry is a Home card plus a *Settings → Personalize routines* row
+- Splits are filtered by days (`Full body` 2–6, `Upper / Lower` 4+, `Push / Pull / Legs`
+  3+); changing days auto-resets an invalid split
+- Generates 1–6 personalized routines from the exercise dataset (1 Full body,
+  2 Upper/Lower, 3 PPL — 6 on a six-day PPL repeat), equipment- and
+  difficulty-filtered with a one-tier fallback and cross-bucket dedup,
+  with per-goal sets/reps/rest (e.g. Strength 4×5/90 s, Fat loss 3×12–15/60 s)
+- **Preview before saving**: tabbed per-template preview where tapping a row swaps
+  the exercise via a picker pre-filtered to that row's muscle bucket; batch-saves
+  with one tap, or Skip with nothing written
+- **Six-day PPL repeat**: 6 days of Push/Pull/Legs generates two cycles —
+  `Push A` / `Pull A` / `Legs A` / `Push B` / `Pull B` / `Legs B` — preferring
+  unused exercises for cycle B and reusing cycle-A picks per bucket when the pool
+  runs out
+
 ### 📚 Exercise library
 - **1,324 exercises** ingested at first launch from the
   [hasaneyldrm/exercises-dataset](https://github.com/hasaneyldrm/exercises-dataset)
   (Retrofit + kotlinx.serialization → Room)
 - Full-text search (Room FTS4) across name, target, and equipment
-- Filters by body part and difficulty; every exercise has an animation GIF,
+- Filters by body part, difficulty, and **equipment** (chips with a clear affordance);
+  every exercise has an animation GIF,
   targeted muscles, equipment, and step-by-step instructions
 - Exercise detail is a **hero surface**: the artwork drives a dynamic gradient
   background and (optionally) re-seeds the entire app palette live
 
 ### 📈 Progress
 - Weekly volume chart (last 10 rolling weeks), weekly sets, PR count
+- **1RM-over-time chart** — pick any PR exercise to see its best estimated 1RM per
+  day over the last 90 days (auto-selects your top PR)
 - Personal-record table with best set and estimated 1RM per exercise
 
 ### 🎨 Material 3 Expressive
@@ -90,6 +113,8 @@ app/src/main/kotlin/com/deepkush/reprange/
 │   └── repo/        # Repositories + first-launch dataset seeder
 ├── domain/usecase/  # CreateWorkoutPlan, StartSession, LogCompletedSet,
 │                    # CalculateProgress (volume buckets, Epley 1RM, PRs)
+├── domain/onboarding/ # Profile (goal/experience/equipment/days/split),
+│                    # GoalConfig, pure OnboardingRecommender (JVM-testable)
 ├── workout/         # ActiveSessionManager: live session + rest timer,
 │                     # survives navigation & process death (Room-backed)
 ├── di/              # Hilt modules (database, network)
@@ -98,7 +123,7 @@ app/src/main/kotlin/com/deepkush/reprange/
 │   ├── component/   # Dynamic background engine, sheet host, dialogs,
 │   │                # settings groups, bottom bar, session dock
 │   └── screens/     # home · library · exercise · workout · template ·
-│                    # progress · settings
+│                    # progress · settings · onboarding
 └── utils/           # AppHaptics, DataStore prefs, shapes, formatters
 ```
 
@@ -113,6 +138,10 @@ app/src/main/kotlin/com/deepkush/reprange/
 - **Live session** — an unfinished session is persisted with `ended_at = NULL`,
   so it survives process death and re-attaches on next launch (mini-dock above
   the nav bar)
+- **Onboarding picks** — per muscle-bucket queries (`target` aliases +
+  `equipment IN allowed` + `difficulty <= max`, `ORDER BY name`) with unused-first
+  dedup, one-tier difficulty fallback, and compound-lift `STEP_UP` for
+  non-beginners; templates are written through the unchanged `CreateWorkoutPlan` path
 
 ## Build & run
 

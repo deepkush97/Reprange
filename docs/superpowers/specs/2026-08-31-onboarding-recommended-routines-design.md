@@ -29,9 +29,10 @@ Home (card: "Personalize your routines?" if !completed) ──tap──> Onboard
   2. Experience    [Beginner | Intermediate | Advanced]           → maxDifficulty
   3. Equipment     [Bodyweight | Dumbbells | Barbell+Dumbbells | Full gym]
   4. Days/week     stepper 2..6 (haptics, +/−)
-  5. Split         filtered by Days: 2→[FullBody], 3→[FullBody,PPL],
-                                         4→[UpperLower,FullBody], 5→[PPL,UpperLower+PPL],
-                                         6→[PPL,PPL×2]  (default = first valid)
+  5. Split         filtered by Days via `validForDays`: FullBody valid 2..6 days,
+                                          UpperLower valid ≥4 days, PPL valid ≥3 days
+                                          (default = first valid; changing Days auto-resets
+                                          an invalid Split, e.g. 4→3 days resets UpperLower to FullBody)
      ──Continue──> Preview (tabs per template, horizontal swipe / SegmentedButton)
                    Each template: header "Push — 5 exercises · 3×10 · 90s" + list of ExerciseRow
                    Tap row → ExercisePickerScreen(mode="template", pre-filtered by bucket category)
@@ -95,7 +96,10 @@ fun recommend(profile: OnboardingProfile, goal: GoalConfig, split: Split): List<
 - `FullBody (6)`: Chest 1, Back 1, Shoulders 1, upper legs 1, waist 1, Arms 1
 - `UpperLower (5+5)`: Upper: Chest 1, Back 1, Shoulders 1, Arms 2; Lower: upper legs 2, lower legs 1, waist 2
 - `PPL (5/5/5)`: Push: Chest 2, Shoulders 2, Triceps 1; Pull: Back 2, Biceps 2, rear delts 1; Legs: upper legs 2, lower legs 1, waist 2
-- `PPL_UL` variants split similarly
+- Six-day PPL repeat: when `days == 6` with split PPL, the cycle repeats as six templates
+  titled `Push A` / `Pull A` / `Legs A` / `Push B` / `Pull B` / `Legs B`. Cycle B prefers
+  unused exercises per bucket and falls back to the same-bucket cycle-A items (same goal
+  config) when the pool is exhausted.
 
 **Per-bucket query:** `ExerciseDao` by `target`/`muscle_group`/`category` + `equipment IN allowed` + `difficulty <= maxDifficulty`, `ORDER BY name LIMIT bucketSize+2`. Deduplicate across buckets; if bucket empty, relax one difficulty tier. Title set as `"Push — Recommended"` etc. `PlanItem` fields: `setCount`/`restSeconds`/`strategy` from `GoalConfig` (`STEP_UP` for Chest/Back/upper legs when Experience != BEGINNER, else `STANDARD`).
 
