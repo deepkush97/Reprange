@@ -84,7 +84,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun OnboardingScreen(
     onFinish: () -> Unit,
-    onPickExercise: (templateIndex: Int, itemIndex: Int) -> Unit = { _, _ -> },
+    onPickExercise: (templateIndex: Int, itemIndex: Int, bucket: String?) -> Unit = { _, _, _ -> },
     onExerciseClick: (String) -> Unit = {},
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
@@ -228,7 +228,7 @@ fun OnboardingScreen(
                                     strategy = item.strategy.name,
                                     onSwap = {
                                         AppHaptics.tap(view)
-                                        onPickExercise(page, itemIndex)
+                                        onPickExercise(page, itemIndex, exercise?.category)
                                     },
                                     onExerciseClick = onExerciseClick,
                                 )
@@ -242,7 +242,7 @@ fun OnboardingScreen(
                                         missing = missing,
                                         onAdd = {
                                             AppHaptics.tap(view)
-                                            onPickExercise(page, template.items.size)
+                                            onPickExercise(page, template.items.size, null)
                                         },
                                     )
                                 }
