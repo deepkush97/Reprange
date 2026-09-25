@@ -199,7 +199,7 @@ fun ActiveWorkoutScreen(
                         displayName = exerciseNames[item.entry.exerciseId] ?: item.entry.exerciseId,
                         onRemoved = { viewModel.removeEntry(item.entry) },
                         onExerciseClick = onExerciseClick,
-                        supersetLabel = SupersetGrouping.supersetLabel(item.entry.supersetGroup),
+                        supersetLabel = SupersetGrouping.supersetLabel(item.entry),
                         nextUpName = nextUpName,
                     )
                 }

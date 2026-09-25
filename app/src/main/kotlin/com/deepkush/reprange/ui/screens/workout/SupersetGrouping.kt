@@ -1,50 +1,63 @@
 package com.deepkush.reprange.ui.screens.workout
 
 import com.deepkush.reprange.data.db.SessionExerciseEntity
+import com.deepkush.reprange.data.db.SetStrategy
 
 /**
  * Pure superset grouping/sequence logic for the active workout.
  *
- * Groups session entries by [SessionExerciseEntity.supersetGroup] (ordered by
- * [SessionExerciseEntity.orderIndex]) and computes the alternating
- * next-exercise recommendation ("Next Up"):
- * - superset member → next partner in the same group, wrapping around
- *   (pair A→B→A alternates; larger groups cycle forward);
- * - standalone entry → next entry in workout order, or null when last.
+ * An entry is a superset member only when its [SessionExerciseEntity.strategy] is
+ * [SetStrategy.SUPER_SET] **and** its [SessionExerciseEntity.supersetGroup] is non-blank
+ * after trimming. Group IDs compare by trimmed value, so `"A"` and `" A "` match.
+ *
+ * Next-exercise recommendation ("Next Up"):
+ * - hidden (null) when the entry is last in workout order, for both superset
+ *   members and standalone entries;
+ * - otherwise a superset member alternates to the next partner in the same group,
+ *   wrapping around (pair A→B→A; larger groups cycle forward);
+ * - otherwise a standalone entry points at the next entry in workout order.
  */
 object SupersetGrouping {
 
-    fun isSupersetMember(supersetGroup: String?): Boolean = !supersetGroup.isNullOrBlank()
+    /** Trimmed group ID, or null when blank. */
+    fun normalizedGroup(supersetGroup: String?): String? =
+        supersetGroup?.trim()?.takeIf { it.isNotEmpty() }
 
-    fun supersetLabel(supersetGroup: String?): String? =
-        supersetGroup?.takeIf { it.isNotBlank() }?.let { "Superset $it" }
+    fun isSupersetMember(entry: SessionExerciseEntity): Boolean =
+        entry.strategy == SetStrategy.SUPER_SET.name && normalizedGroup(entry.supersetGroup) != null
 
-    /** Same-group members excluding [current], ordered by orderIndex. */
+    fun supersetLabel(entry: SessionExerciseEntity): String? =
+        if (isSupersetMember(entry)) "Superset ${normalizedGroup(entry.supersetGroup)}" else null
+
+    /** Same-group superset members excluding [current], ordered by orderIndex. */
     fun partners(
         entries: List<SessionExerciseEntity>,
         current: SessionExerciseEntity,
     ): List<SessionExerciseEntity> {
-        val group = current.supersetGroup?.takeIf { it.isNotBlank() } ?: return emptyList()
+        if (!isSupersetMember(current)) return emptyList()
+        val group = normalizedGroup(current.supersetGroup) ?: return emptyList()
         return entries
-            .filter { it.id != current.id && it.supersetGroup == group }
+            .filter { it.id != current.id && isSupersetMember(it) && normalizedGroup(it.supersetGroup) == group }
             .sortedBy { it.orderIndex }
     }
 
-    /** Alternating next-exercise recommendation for [currentId], or null. */
+    /** Alternating next-exercise recommendation for [currentId], or null when none. */
     fun nextUp(
         entries: List<SessionExerciseEntity>,
         currentId: Long,
     ): SessionExerciseEntity? {
         if (entries.isEmpty()) return null
         val ordered = entries.sortedBy { it.orderIndex }
-        val current = ordered.firstOrNull { it.id == currentId } ?: return null
-        if (isSupersetMember(current.supersetGroup)) {
-            val groupMembers = ordered.filter { it.supersetGroup == current.supersetGroup }
-            if (groupMembers.size < 2) return null
-            val idx = groupMembers.indexOfFirst { it.id == currentId }
-            return groupMembers[(idx + 1) % groupMembers.size]
-        }
         val idx = ordered.indexOfFirst { it.id == currentId }
-        return ordered.getOrNull(idx + 1)
+        if (idx == -1 || idx == ordered.lastIndex) return null
+        val current = ordered[idx]
+        if (isSupersetMember(current)) {
+            val group = normalizedGroup(current.supersetGroup) ?: return null
+            val groupMembers = ordered.filter { isSupersetMember(it) && normalizedGroup(it.supersetGroup) == group }
+            if (groupMembers.size < 2) return null
+            val memberIdx = groupMembers.indexOfFirst { it.id == currentId }
+            return groupMembers[(memberIdx + 1) % groupMembers.size]
+        }
+        return ordered[idx + 1]
     }
 }
