@@ -213,12 +213,71 @@ class OnboardingRecommenderTest {
         repeat(4) { ex += exercise("wa$it", category = "waist") }
         val fakeDao = FakeExerciseDao(ex)
         val engine = OnboardingRecommender(fakeDao)
-        val profile = OnboardingProfile(Goal.STRENGTH, Experience.ADVANCED, EquipmentProfile.FULL_GYM, 6, Split.PPL)
+        val profile = OnboardingProfile(Goal.STRENGTH, Experience.ADVANCED, EquipmentProfile.FULL_GYM, 3, Split.PPL)
         val result = engine.recommend(profile)
         assertThat(result).hasSize(3)
         assertThat(result[0].items).hasSize(5)
         assertThat(result[1].items).hasSize(5)
         assertThat(result[2].items).hasSize(5)
+    }
+
+    @Test
+    fun recommend_ppl_sixDays_returnsTwoCyclesWithABTitles() = runTest {
+        val ex = mutableListOf<ExerciseEntity>()
+        // Enough for two full PPL cycles (30 items): Push x2 (chest 4, shoulders 4, triceps 2),
+        // Pull x2 (back 4, biceps 4, shoulders 2 more -> 6 shoulders total), Legs x2 (upper legs 4, lower legs 2, waist 4)
+        repeat(4) { ex += exercise("ch$it", category = "chest") }
+        repeat(6) { ex += exercise("sh$it", category = "shoulders") }
+        repeat(2) { ex += exercise("tri$it", category = "upper arms", target = "triceps", muscleGroup = "triceps") }
+        repeat(4) { ex += exercise("bk$it", category = "back") }
+        repeat(4) { ex += exercise("bi$it", category = "upper arms", target = "biceps", muscleGroup = "biceps") }
+        repeat(4) { ex += exercise("ul$it", category = "upper legs") }
+        repeat(2) { ex += exercise("ll$it", category = "lower legs") }
+        repeat(4) { ex += exercise("wa$it", category = "waist") }
+        val fakeDao = FakeExerciseDao(ex)
+        val engine = OnboardingRecommender(fakeDao)
+        val profile = OnboardingProfile(Goal.STRENGTH, Experience.ADVANCED, EquipmentProfile.FULL_GYM, 6, Split.PPL)
+        val result = engine.recommend(profile)
+        assertThat(result).hasSize(6)
+        assertThat(result.map { it.title }).containsExactly(
+            "Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B",
+        ).inOrder()
+        result.forEach { assertThat(it.items).hasSize(5) }
+        // First cycle uses unused exercises when available: no ID reused across the two cycles
+        val allIds = result.flatMap { it.items }.map { it.exerciseId }
+        assertThat(allIds.size).isEqualTo(allIds.toSet().size)
+        // Same goal config everywhere
+        val config = Goal.STRENGTH.config()
+        assertThat(result.flatMap { it.items }.all { it.setCount == config.sets }).isTrue()
+        assertThat(result.flatMap { it.items }.all { it.targetReps == config.repLow }).isTrue()
+        assertThat(result.flatMap { it.items }.all { it.restSeconds == config.restSeconds }).isTrue()
+    }
+
+    @Test
+    fun recommend_ppl_sixDays_fallsBackToFirstCycleIds_whenPoolExhausted() = runTest {
+        val ex = mutableListOf<ExerciseEntity>()
+        // Only enough for a single PPL cycle (15 items)
+        repeat(2) { ex += exercise("ch$it", category = "chest") }
+        repeat(3) { ex += exercise("sh$it", category = "shoulders") }
+        ex += exercise("tri0", category = "upper arms", target = "triceps", muscleGroup = "triceps")
+        repeat(2) { ex += exercise("bk$it", category = "back") }
+        repeat(2) { ex += exercise("bi$it", category = "upper arms", target = "biceps", muscleGroup = "biceps") }
+        repeat(2) { ex += exercise("ul$it", category = "upper legs") }
+        ex += exercise("ll0", category = "lower legs")
+        repeat(2) { ex += exercise("wa$it", category = "waist") }
+        val fakeDao = FakeExerciseDao(ex)
+        val engine = OnboardingRecommender(fakeDao)
+        val profile = OnboardingProfile(Goal.STRENGTH, Experience.ADVANCED, EquipmentProfile.FULL_GYM, 6, Split.PPL)
+        val result = engine.recommend(profile)
+        assertThat(result).hasSize(6)
+        assertThat(result.map { it.title }).containsExactly(
+            "Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B",
+        ).inOrder()
+        result.forEach { assertThat(it.items).hasSize(5) }
+        // Second cycle falls back to first-cycle IDs with the same goal config
+        assertThat(result[3].items).isEqualTo(result[0].items)
+        assertThat(result[4].items).isEqualTo(result[1].items)
+        assertThat(result[5].items).isEqualTo(result[2].items)
     }
 
     @Test
@@ -354,7 +413,7 @@ class OnboardingRecommenderTest {
         ex += exercise("wa2", category = "waist", difficulty = "BEGINNER")
         val fakeDao = FakeExerciseDao(ex)
         val engine = OnboardingRecommender(fakeDao)
-        val profile = OnboardingProfile(Goal.STRENGTH, Experience.BEGINNER, EquipmentProfile.FULL_GYM, 6, Split.PPL)
+        val profile = OnboardingProfile(Goal.STRENGTH, Experience.BEGINNER, EquipmentProfile.FULL_GYM, 3, Split.PPL)
         val result = engine.recommend(profile)
         assertThat(result).hasSize(3)
         // Push should have 5 items, including tri_sec via secondaryMuscles fallback
