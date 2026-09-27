@@ -296,10 +296,10 @@ private fun AppNavHost(navController: NavHostController) {
             }
             OnboardingScreen(
                 onFinish = { navController.popBackStack() },
-                onPickExercise = { tIdx, iIdx ->
+                onPickExercise = { tIdx, iIdx, bucket ->
                     entry.savedStateHandle["swap_template_idx"] = tIdx
                     entry.savedStateHandle["swap_item_idx"] = iIdx
-                    navController.navigate(ExercisePickerRoute("template"))
+                    navController.navigate(ExercisePickerRoute("template", 0L, bucket))
                 },
                 onExerciseClick = { id -> navController.navigate(ExerciseDetailRoute(id)) },
                 viewModel = onboardingVm,
@@ -363,6 +363,7 @@ private fun AppNavHost(navController: NavHostController) {
                     navController.popBackStack()
                 },
                 onBack = { navController.popBackStack() },
+                initialCategory = route.initialCategory,
             )
         }
     }

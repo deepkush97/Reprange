@@ -72,6 +72,7 @@ class StartWorkoutSessionUseCase @Inject constructor(
                     StartEntry(
                         exerciseId = e.exerciseId,
                         restSeconds = e.restSeconds ?: 90,
+                        strategy = e.strategy,
                         supersetGroup = e.supersetGroup,
                         plannedSets = e.setCount,
                         targetWeightKg = e.targetWeightKg,
@@ -86,6 +87,7 @@ class StartWorkoutSessionUseCase @Inject constructor(
     data class StartEntry(
         val exerciseId: String,
         val restSeconds: Int,
+        val strategy: String = SetStrategy.STANDARD.name,
         val supersetGroup: String?,
         val plannedSets: Int? = null,
         val targetWeightKg: Double? = null,
@@ -110,6 +112,7 @@ class StartWorkoutSessionUseCase @Inject constructor(
                         exerciseId = e.exerciseId,
                         orderIndex = i,
                         restSeconds = e.restSeconds,
+                        strategy = e.strategy,
                         supersetGroup = e.supersetGroup,
                         plannedSets = e.plannedSets,
                         targetWeightKg = e.targetWeightKg,

@@ -36,6 +36,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -71,6 +73,7 @@ fun LibraryScreen(
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val equipmentOptions by viewModel.equipmentOptions.collectAsStateWithLifecycle()
     val seedState by viewModel.seedState.collectAsStateWithLifecycle()
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
@@ -146,6 +149,25 @@ fun LibraryScreen(
             }
         }
 
+        // Equipment filter row backed by LibraryViewModel.equipmentOptions.
+        if (equipmentOptions.isNotEmpty()) {
+            EquipmentFilterRow(
+                options = equipmentOptions,
+                selected = filters.equipment,
+                onSelect = {
+                    AppHaptics.segmentTick(view)
+                    viewModel.setEquipment(it)
+                },
+                onClear = {
+                    AppHaptics.tap(view)
+                    viewModel.clearFilters()
+                },
+                hasActiveFilters = filters.category != null ||
+                    filters.equipment != null ||
+                    filters.difficulty != null,
+            )
+        }
+
         when (seedState) {
             DatasetSeeder.SeedState.Loading -> FullScreenLoading()
             is DatasetSeeder.SeedState.Error -> SeedError((seedState as DatasetSeeder.SeedState.Error).message) {
@@ -161,6 +183,41 @@ fun LibraryScreen(
                     if (index == results.lastIndex) Spacer(Modifier.height(140.dp))
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun EquipmentFilterRow(
+    options: List<String>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+    onClear: () -> Unit,
+    hasActiveFilters: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .testTag("equipment_filter_row")
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        options.forEach { equipment ->
+            val isSelected = selected == equipment
+            FilterChip(
+                selected = isSelected,
+                onClick = { onSelect(if (isSelected) null else equipment) },
+                label = { Text(equipment.replaceFirstChar { it.uppercase() }) },
+                modifier = Modifier.testTag("equipment_chip_$equipment"),
+            )
+        }
+        if (hasActiveFilters) {
+            TextButton(
+                onClick = onClear,
+                modifier = Modifier.testTag("library_clear_filters"),
+            ) { Text("Clear") }
         }
     }
 }

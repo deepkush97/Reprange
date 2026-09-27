@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
@@ -34,9 +35,18 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.deepkush.reprange.data.db.ExerciseEntity
 import com.deepkush.reprange.data.repo.DatasetSeeder
 import com.deepkush.reprange.ui.component.LocalAppWindowInsets
 import com.deepkush.reprange.utils.AppHaptics
+
+/**
+ * Resolves the muscle bucket/category used to prefilter the picker for a given
+ * row exercise. Returns null when there is nothing to scope by, leaving the
+ * picker unscoped (template/session default).
+ */
+fun bucketForExercise(exercise: ExerciseEntity?): String? =
+    exercise?.category?.takeIf { it.isNotBlank() }
 
 
 @Composable
@@ -45,12 +55,19 @@ fun ExercisePickerScreen(
     onSelect: (String) -> Unit,
     onBack: () -> Unit = {},
     viewModel: com.deepkush.reprange.viewmodels.LibraryViewModel = hiltViewModel(),
+    initialCategory: String? = null,
 ) {
     val view = LocalView.current
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val seedState by viewModel.seedState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(initialCategory) {
+        if (!initialCategory.isNullOrBlank()) {
+            viewModel.setCategory(initialCategory)
+        }
+    }
 
     Column(
         Modifier

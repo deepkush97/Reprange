@@ -139,21 +139,56 @@ class OnboardingRecommender @Inject constructor(
                     listOf("waist", "abs") to 2,
                 )
 
+                suspend fun buildBuckets(buckets: List<Pair<List<String>, Int>>): List<List<PlanItem>> {
+                    return buckets.map { (targets, count) ->
+                        val picked = pick(targets, count)
+                        picked.forEach { usedIds.add(it.id) }
+                        toPlanItems(picked, targets)
+                    }
+                }
+
                 suspend fun build(title: String, buckets: List<Pair<List<String>, Int>>): PreviewTemplate {
+                    return PreviewTemplate(title = title, items = buildBuckets(buckets).flatten())
+                }
+
+                suspend fun buildRepeat(
+                    title: String,
+                    buckets: List<Pair<List<String>, Int>>,
+                    firstCycleBuckets: List<List<PlanItem>>,
+                ): PreviewTemplate {
                     val items = mutableListOf<PlanItem>()
-                    for ((targets, count) in buckets) {
+                    buckets.forEachIndexed { index, (targets, count) ->
                         val picked = pick(targets, count)
                         picked.forEach { usedIds.add(it.id) }
                         items += toPlanItems(picked, targets)
+                        // Fall back to first-cycle IDs for the same bucket when unused exercises run out.
+                        val shortfall = count - picked.size
+                        if (shortfall > 0) {
+                            items += firstCycleBuckets[index].take(shortfall)
+                        }
                     }
                     return PreviewTemplate(title = title, items = items)
                 }
 
-                listOf(
-                    build("Push — Recommended", pushBuckets),
-                    build("Pull — Recommended", pullBuckets),
-                    build("Legs — Recommended", legsBuckets),
-                )
+                if (profile.days == 6) {
+                    val pushABuckets = buildBuckets(pushBuckets)
+                    val pullABuckets = buildBuckets(pullBuckets)
+                    val legsABuckets = buildBuckets(legsBuckets)
+                    listOf(
+                        PreviewTemplate(title = "Push A", items = pushABuckets.flatten()),
+                        PreviewTemplate(title = "Pull A", items = pullABuckets.flatten()),
+                        PreviewTemplate(title = "Legs A", items = legsABuckets.flatten()),
+                        buildRepeat("Push B", pushBuckets, pushABuckets),
+                        buildRepeat("Pull B", pullBuckets, pullABuckets),
+                        buildRepeat("Legs B", legsBuckets, legsABuckets),
+                    )
+                } else {
+                    listOf(
+                        build("Push — Recommended", pushBuckets),
+                        build("Pull — Recommended", pullBuckets),
+                        build("Legs — Recommended", legsBuckets),
+                    )
+                }
             }
         }
     }

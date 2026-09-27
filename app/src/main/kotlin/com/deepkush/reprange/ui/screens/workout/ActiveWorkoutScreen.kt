@@ -60,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -181,7 +182,13 @@ fun ActiveWorkoutScreen(
                     )
                 }
 
-                itemsIndexed(active.exercises.sortedBy { it.entry.orderIndex }, key = { _, e -> e.entry.id }) { index, item ->
+                val ordered = active.exercises.sortedBy { it.entry.orderIndex }
+                val orderedEntries = ordered.map { it.entry }
+                itemsIndexed(ordered, key = { _, e -> e.entry.id }) { index, item ->
+                    val nextUpEntry = SupersetGrouping.nextUp(orderedEntries, item.entry.id)
+                    val nextUpName = nextUpEntry?.let {
+                        exerciseNames[it.exerciseId] ?: it.exerciseId
+                    }
                     ExerciseEntryCard(
                         item = item,
                         index = index,
@@ -192,6 +199,8 @@ fun ActiveWorkoutScreen(
                         displayName = exerciseNames[item.entry.exerciseId] ?: item.entry.exerciseId,
                         onRemoved = { viewModel.removeEntry(item.entry) },
                         onExerciseClick = onExerciseClick,
+                        supersetLabel = SupersetGrouping.supersetLabel(item.entry),
+                        nextUpName = nextUpName,
                     )
                 }
 
@@ -312,6 +321,8 @@ private fun ExerciseEntryCard(
     displayName: String,
     onRemoved: () -> Unit,
     onExerciseClick: (String) -> Unit = {},
+    supersetLabel: String? = null,
+    nextUpName: String? = null,
 ) {
     val view = LocalView.current
     val entry = item.entry
@@ -431,6 +442,18 @@ private fun ExerciseEntryCard(
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
+                if (supersetLabel != null) {
+                    if (strategy != SetStrategy.STANDARD) Spacer(Modifier.width(6.dp))
+                    Text(
+                        supersetLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .testTag("superset_badge_${entry.id}"),
+                    )
+                }
                 IconButton(onClick = { showMenu = !showMenu }, modifier = Modifier.size(30.dp)) {
                     Icon(Icons.Filled.Close, contentDescription = "Remove", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 }
@@ -442,6 +465,18 @@ private fun ExerciseEntryCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 4.dp),
+                )
+            }
+
+            if (nextUpName != null) {
+                Text(
+                    "Next Up: $nextUpName",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .padding(start = 4.dp, bottom = 4.dp)
+                        .testTag("next_up_${entry.id}"),
                 )
             }
 

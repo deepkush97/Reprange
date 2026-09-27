@@ -36,7 +36,7 @@ data class TemplateBuilderRoute(val templateId: Long? = null)
 
 /** Selection modes: "template" adds to builder draft, "session" adds to live session. */
 @Serializable
-data class ExercisePickerRoute(val mode: String, val contextId: Long = 0L)
+data class ExercisePickerRoute(val mode: String, val contextId: Long = 0L, val initialCategory: String? = null)
 
 @Serializable
 data object OnboardingRoute
